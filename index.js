@@ -8,7 +8,12 @@ app.use(bodyParser.json());
 // 🔑 Credentials from Environment Variables
 const whatsappNumberId = process.env.WHATSAPP_NUMBER_ID;
 const token = process.env.WHATSAPP_TOKEN;
-const phoneNumber = process.env.PHONE_NUMBER;
+const phoneNumber = data.customer?.phone; // Shopify se actual customer number
+if(customerNumber){
+  await sendWhatsAppMessage(customerNumber, message);
+} else {
+  console.log("❌ Customer number missing!");
+}
 
 // Helper function to send WhatsApp message
 async function sendWhatsAppMessage(to, message) {
@@ -63,3 +68,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+

@@ -5,13 +5,22 @@ import fetch from "node-fetch";
 const app = express();
 app.use(bodyParser.json());
 
-// 🔑 Credentials from Environment Variables
+// 🔑 Environment Variables
 const whatsappNumberId = process.env.WHATSAPP_NUMBER_ID;
 const token = process.env.WHATSAPP_TOKEN;
 
-// Helper function to send WhatsApp message
-async function sendWhatsAppMessage(to, message) {
+// 📌 Shopify webhook
+app.post("/webhook", async (req, res) => {
   try {
+    const data = req.body;
+    const customerNumber = data.customer?.phone;
+
+    if (!customerNumber) {
+      console.log("❌ Customer number missing!");
+      return res.status(400).send("Customer number missing!");
+    }
+
+    // WhatsApp template message
     const response = await fetch(
       `https://graph.facebook.com/v19.0/${whatsappNumberId}/messages`,
       {
@@ -22,40 +31,33 @@ async function sendWhatsAppMessage(to, message) {
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: to,
-          type: "text",
-          text: { body: message },
+          to: customerNumber,
+          type: "template",
+          template: {
+            name: "order_placed", // Meta approved template
+            language: { code: "en" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: data.customer?.first_name || "Customer" },
+                  { type: "text", text: data.id },
+                  { type: "text", text: data.total_price || "0" },
+                  { type: "text", text: data.currency || "PKR" },
+                  { type: "text", text: data.shipping_lines?.[0]?.title || "N/A" },
+                  { type: "text", text: data.shipping_lines?.[0]?.tracking_number || "N/A" }
+                ]
+              }
+            ]
+          }
         }),
       }
     );
 
     const result = await response.json();
-    console.log("✅ WhatsApp API Response:", result);
-  } catch (error) {
-    console.error("❌ Error sending WhatsApp message:", error);
-  }
-}
+    console.log("✅ WhatsApp Template Response:", result);
 
-// 📌 Shopify webhook route
-app.post("/webhook", async (req, res) => {
-  try {
-    const data = req.body;
-
-    // Extract customer phone number (ensure it's in international format for WhatsApp)
-    const phoneNumber = data.customer?.phone;
-
-    if (!phoneNumber) {
-      console.log("❌ Customer phone number is missing!");
-      return res.status(400).send("Customer phone number is missing.");
-    }
-
-    // Construct WhatsApp message
-    const message = `✅ New Shopify Order Received!\n\n🆔 Order ID: ${data.id}\n👤 Customer: ${data.customer?.first_name || "N/A"} ${data.customer?.last_name || ""}\n💰 Total: ${data.total_price || "N/A"} ${data.currency || ""}\n📦 Courier: ${data.shipping_lines?.[0]?.title || "N/A"}\n📍 Tracking: ${data.shipping_lines?.[0]?.tracking_number || "N/A"}`;
-
-    // Send WhatsApp message
-    await sendWhatsAppMessage(phoneNumber, message);
-
-    res.status(200).send("Webhook received & WhatsApp message sent!");
+    res.status(200).send("Webhook received & Template message sent!");
   } catch (error) {
     console.error("❌ Error handling webhook:", error);
     res.status(500).send("Server error");

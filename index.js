@@ -190,8 +190,8 @@ app.post(
 
 
 // ---------- WhatsApp Button Handler ----------
-app.use("/webhook", express.json());
-app.post("/webhook", async (req, res) => {
+app.use("/webhook/whatsapp", express.json());
+app.post("/webhook/whatsapp", async (req, res) => {
   try {
     console.log("Webhook received:", JSON.stringify(req.body, null, 2));
     const messages = req.body.entry?.[0]?.changes?.[0]?.value?.messages;
@@ -238,4 +238,5 @@ app.get("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 

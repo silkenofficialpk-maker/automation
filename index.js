@@ -250,7 +250,85 @@ app.get("/demo/send", async (req, res) => {
   res.json(resp);
 });
 
+// ✅ Webhook endpoint for WhatsApp
+app.post("/webhook", async (req, res) => {
+  try {
+    const data = req.body;
+
+    // Debug log
+    console.log("Webhook received:", JSON.stringify(data, null, 2));
+
+    // Check if button reply event aya hai
+    const messages = data.entry?.[0]?.changes?.[0]?.value?.messages;
+    if (!messages || messages.length === 0) {
+      return res.sendStatus(200);
+    }
+
+    const message = messages[0];
+
+    if (message.type === "button") {
+      const payload = message.button.payload; // CONFIRM_ORDER ya CANCEL_ORDER
+      const customerPhone = message.from;
+
+      console.log("📩 Button clicked:", payload, "From:", customerPhone);
+
+      // ✅ Order ID ko metadata/previous msg se nikalna hoga
+      // For now demo hardcode
+      const ORDER_ID = "1234567890";  
+
+      // Note text
+      let note = "";
+      if (payload === "CONFIRM_ORDER") {
+        note = "✅ Order Confirmed via WhatsApp";
+      } else if (payload === "CANCEL_ORDER") {
+        note = "❌ Order Cancelled via WhatsApp";
+      }
+
+      // ✅ Shopify API call to add note
+      const url = `https://${SHOPIFY_STORE}/admin/api/2024-01/orders/${ORDER_ID}.json`;
+
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          order: {
+            id: ORDER_ID,
+            note: note,
+          },
+        }),
+      });
+
+      const result = await response.json();
+      console.log("✅ Shopify Order Updated:", result);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("❌ Webhook Error:", error);
+    res.sendStatus(500);
+  }
+});
+
+// Verify webhook challenge (Meta setup)
+app.get("/webhook", (req, res) => {
+  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token && mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verified ✅");
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
 // ---------- Start ----------
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+

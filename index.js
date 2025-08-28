@@ -148,16 +148,22 @@ app.post(
         data.fulfillments?.[0]?.tracking_url ||
         "N/A";
 
+      // ✅ NEW FIELDS
+      const storeName = process.env.STORE_NAME || SHOPIFY_SHOP;
+      const firstProduct = data.line_items?.[0]?.title || "Product";
+
       const components = [
         {
           type: "body",
           parameters: [
-            { type: "text", text: firstName },
-            { type: "text", text: String(orderId) },
-            { type: "text", text: total },
-            { type: "text", text: currency },
-            { type: "text", text: courierName },
-            { type: "text", text: trackingUrl },
+            { type: "text", text: firstName },     // {{1}} Customer name
+            { type: "text", text: String(orderId) }, // {{2}} Order ID
+            { type: "text", text: total },        // {{3}} Total
+            { type: "text", text: currency },     // {{4}} Currency
+            { type: "text", text: firstProduct }, // {{5}} Product Name
+            { type: "text", text: storeName },    // {{6}} Store Name
+            { type: "text", text: courierName },  // {{7}} Courier
+            { type: "text", text: trackingUrl },  // {{8}} Tracking link
           ],
         },
       ];
@@ -181,6 +187,7 @@ app.post(
     }
   }
 );
+
 
 // ---------- WhatsApp Button Handler ----------
 app.use("/webhook", express.json());
@@ -231,3 +238,4 @@ app.get("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+

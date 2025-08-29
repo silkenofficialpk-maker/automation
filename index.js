@@ -121,47 +121,47 @@ app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (r
       return res.status(200).send("No phone — ignoring");
     }
 
-    // extract fields
-    const firstName =
-      data.customer?.first_name ||
-      data.billing_address?.first_name ||
-      data.shipping_address?.first_name ||
-      "Customer";
-    const orderId = data.id;
-    const total = String(data.total_price || data.subtotal_price || "0");
-    const currency = data.currency || data.total_price_set?.shop_money?.currency_code || "PKR";
-    const firstProduct = data.line_items?.[0]?.title || "Product";
-    const courierName = data.shipping_lines?.[0]?.title || "Courier";
-    const trackingUrl =
-      data.shipping_lines?.[0]?.tracking_url ||
-      data.fulfillments?.[0]?.tracking_url ||
-      "N/A";
-    const storeName = STORE_NAME || SHOPIFY_SHOP;
+   // extract fields
+const firstName =
+  data.customer?.first_name ||
+  data.billing_address?.first_name ||
+  data.shipping_address?.first_name ||
+  "Customer";
+const orderId = data.id;
+const total = String(data.total_price || data.subtotal_price || "0");
+const currency =
+  data.currency ||
+  data.total_price_set?.shop_money?.currency_code ||
+  "PKR";
+const firstProduct = data.line_items?.[0]?.title || "Product";
+const storeName = STORE_NAME || SHOPIFY_SHOP;
 
-    // map phone -> order
-    recentOrders.set(phone, { orderId, createdAt: Date.now() });
+// map phone -> order
+recentOrders.set(phone, { orderId, createdAt: Date.now() });
 
-    // template parameters
-    const components = [
-      {
-        type: "body",
-        parameters: [
-          { type: "text", text: firstName },
-          { type: "text", text: String(orderId) },
-          { type: "text", text: firstProduct },
-          { type: "text", text: "1" },
-          { type: "text", text: storeName },
-          { type: "text", text: total },
-          { type: "text", text: currency },
-          { type: "text", text: courierName },
-          { type: "text", text: trackingUrl },
-        ],
-      },
-    ];
+// ✅ template parameters (only 7 placeholders!)
+const components = [
+  {
+    type: "body",
+    parameters: [
+      { type: "text", text: firstName },        // {{1}}
+      { type: "text", text: String(orderId) },  // {{2}}
+      { type: "text", text: firstProduct },     // {{3}}
+      { type: "text", text: "1" },              // {{4}} quantity
+      { type: "text", text: storeName },        // {{5}}
+      { type: "text", text: total },            // {{6}}
+      { type: "text", text: currency },         // {{7}}
+    ],
+  },
+];
 
-    // send WhatsApp template
-    const waResp = await sendWhatsAppTemplate(phone, TEMPLATE_ORDER_PLACED_NAME, components);
-    console.log("✅ WhatsApp sent to", phone);
+// send WhatsApp template
+const waResp = await sendWhatsAppTemplate(
+  phone,
+  TEMPLATE_ORDER_PLACED_NAME, // should be "order_confirmation"
+  components
+);
+console.log("✅ WhatsApp sent to", phone);
 
     // update Shopify order note
     await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TEMPLATE_ORDER_PLACED_NAME} (msgId: ${waResp?.messages?.[0]?.id || "N/A"})`);
@@ -215,3 +215,4 @@ app.get("/", (req, res) => res.send("✅ Service running"));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+

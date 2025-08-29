@@ -153,64 +153,113 @@ app.get("/webhook/meta", (req, res) => {
 app.use(express.json());
 
 // ---------- Shopify webhook (orders/create) ----------
-// Use raw body for HMAC verification; content-type = application/json
-app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (req, res) => {
-  try {
-    // optional HMAC verify
-    if (SHOPIFY_WEBHOOK_SECRET) {
-      const hmacHeader = req.get("X-Shopify-Hmac-Sha256") || "";
-      const digest = crypto.createHmac("sha256", SHOPIFY_WEBHOOK_SECRET).update(req.body).digest("base64");
-      if (digest !== hmacHeader) {
-        console.warn("❌ Shopify HMAC verification failed");
-        return res.sendStatus(401);
+app.post(
+  "/webhook/shopify",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      // optional HMAC verify
+      if (SHOPIFY_WEBHOOK_SECRET) {
+        const hmacHeader = req.get("X-Shopify-Hmac-Sha256") || "";
+        const digest = crypto
+          .createHmac("sha256", SHOPIFY_WEBHOOK_SECRET)
+          .update(req.body)
+          .digest("base64");
+        if (digest !== hmacHeader) {
+          console.warn("❌ Shopify HMAC verification failed");
+          return res.sendStatus(401);
+        }
       }
+
+      const data = JSON.parse(req.body.toString("utf8"));
+      console.log("🧾 Shopify webhook received (order id):", data.id);
+
+      // prefer checkout phone
+      const checkoutPhone =
+        data.shipping_address?.phone ||
+        data.billing_address?.phone ||
+        data.customer?.phone ||
+        null;
+
+      const phone = normalizePhone(checkoutPhone);
+      if (!phone) {
+        console.warn("❌ No phone in order:", data.id);
+        return res.status(200).send("No phone — ignoring");
+      }
+
+      // extract fields
+      const firstName =
+        data.customer?.first_name ||
+        data.billing_address?.first_name ||
+        data.shipping_address?.first_name ||
+        "Customer";
+      const orderId = data.id;
+      const total = String(
+        data.total_price || data.subtotal_price || "0"
+      );
+      const currency =
+        data.currency ||
+        data.total_price_set?.shop_money?.currency_code ||
+        "PKR";
+      const firstProduct = data.line_items?.[0]?.title || "Product";
+      const courierName = data.shipping_lines?.[0]?.title || "Courier";
+      const trackingUrl =
+        data.shipping_lines?.[0]?.tracking_url ||
+        data.fulfillments?.[0]?.tracking_url ||
+        "N/A";
+      const storeName = process.env.STORE_NAME || SHOPIFY_SHOP;
+
+      // cache order
+      recentOrders.set(phone, { orderId, createdAt: Date.now() });
+
+      // Build WhatsApp template params
+      const components = [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: firstName }, // {{1}} Customer First Name
+            { type: "text", text: String(orderId) }, // {{2}} Order ID
+            { type: "text", text: firstProduct }, // {{3}} Product Name
+            { type: "text", text: "1" }, // {{4}} Quantity
+            { type: "text", text: storeName }, // {{5}} Store Name
+            { type: "text", text: total }, // {{6}} Total
+            { type: "text", text: currency }, // {{7}} Currency
+            { type: "text", text: courierName }, // {{8}} Courier Name
+            { type: "text", text: trackingUrl }, // {{9}} Tracking URL
+          ],
+        },
+      ];
+
+      // Send WhatsApp notification
+      await fetch(
+        `https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${WA_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: phone,
+            type: "template",
+            template: {
+              name: WA_TEMPLATE,
+              language: { code: "en" },
+              components,
+            },
+          }),
+        }
+      );
+
+      console.log("✅ WhatsApp order confirmation sent to", phone);
+      res.sendStatus(200);
+    } catch (err) {
+      console.error("❌ Shopify webhook handler error:", err.message);
+      res.sendStatus(500);
     }
-
-    const data = JSON.parse(req.body.toString("utf8"));
-    console.log("🧾 Shopify webhook received (order id):", data.id);
-
-    // prefer checkout phone (shipping/billing)
-    const checkoutPhone = data.shipping_address?.phone || data.billing_address?.phone || null;
-    const phone = normalizePhone(checkoutPhone);
-    if (!phone) {
-      console.warn("❌ Customer phone missing in checkout fields. Payload excerpts:");
-      console.log("customer.phone:", data.customer?.phone, "shipping.address.phone:", data.shipping_address?.phone, "billing.address.phone:", data.billing_address?.phone);
-      // respond 200 to avoid Shopify retry spam
-      return res.status(200).send("No phone — ignoring");
-    }
-
-    // extract fields
-    const firstName = data.customer?.first_name || data.billing_address?.first_name || data.shipping_address?.first_name || "Customer";
-    const orderId = data.id;
-    const total = String(data.total_price || data.subtotal_price || "0");
-    const currency = data.currency || (data.total_price_set?.shop_money?.currency_code) || "PKR";
-    const firstProduct = data.line_items?.[0]?.title || "Product";
-    const courierName = data.shipping_lines?.[0]?.title || "Courier";
-    const trackingUrl = data.shipping_lines?.[0]?.tracking_url || data.fulfillments?.[0]?.tracking_url || "N/A";
-    const storeName = process.env.STORE_NAME || SHOPIFY_SHOP;
-
-    // store mapping phone -> latest order (demo). Production: use DB with TTL
-    recentOrders.set(phone, { orderId, createdAt: Date.now() });
-
-    // Build components parameters in same order as your approved template placeholders
-    // Ensure your approved template placeholders match this order.
-    const components = [
-      {
-        type: "body",
-        parameters: [
-          { type: "text", text: firstName },        // {{1}} Customer First Name
-          { type: "text", text: String(orderId) },  // {{2}} Order ID
-          { type: "text", text: firstProduct },     // {{3}} Product Name
-          { type: "text", text: "1" },              // {{4}} Quantity (set 1 as default; you can compute)
-          { type: "text", text: storeName },        // {{5}} Store Name
-          { type: "text", text: total },            // {{6}} Total Price
-          { type: "text", text: currency },         // {{7}} Currency
-          { type: "text", text: courierName },      // {{8}} Courier Name
-          { type: "text", text: trackingUrl },      // {{9}} Tracking URL (N/A if none)
-        ],
-      },
-    ];
-
+  }
+);
     // Send WhatsApp template
     const waResp = await sendWhatsAppTemplate(phone, TEMPLATE_ORDER_PLACED_NAME, components);
     console.log("✅ WhatsApp response (order):", waResp);
@@ -336,4 +385,5 @@ app.get("/demo/send", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 

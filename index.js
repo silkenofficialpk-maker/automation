@@ -14,7 +14,7 @@ const {
   SHOPIFY_SHOP,
   SHOPIFY_ACCESS_TOKEN,
   VERIFY_TOKEN_META = "shopify123",
-  TEMPLATE_ORDER_PLACED_NAME = "order_placed",
+  TEMPLATE_ORDER_PLACED_NAME = "order_confirmation",
   LANG_CODE = "en",
   DEFAULT_COUNTRY_CODE = "92",
   SHOPIFY_WEBHOOK_SECRET,
@@ -215,4 +215,5 @@ app.get("/", (req, res) => res.send("✅ Service running"));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 

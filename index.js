@@ -115,6 +115,27 @@ async function updateShopifyOrderNote(orderId, noteText) {
   }
 }
 
+
+// Verification helper - put this near top of index.js (before other webhook POST handlers)
+app.get(["/webhook", "/webhook/whatsapp", "/webhook/meta"], (req, res) => {
+  console.log("🔥 Incoming webhook VERIFY request:", req.originalUrl, req.query);
+
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  // Make sure VERIFY_TOKEN_META env var equals the token you enter in Meta dashboard
+  if (mode === "subscribe" && token && token === process.env.VERIFY_TOKEN_META) {
+    console.log("✅ Webhook verified — responding with challenge:", challenge);
+    return res.status(200).send(challenge); // must return plain challenge
+  }
+
+  console.warn("❌ Webhook verification failed. mode=", mode, "token=", token);
+  return res.sendStatus(403);
+});
+
+
+
 // ---------- meta verification endpoint ----------
 app.get("/webhook/meta", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -315,3 +336,4 @@ app.get("/demo/send", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+

@@ -2,7 +2,10 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
-import serviceAccount from "./automation-4b66d-firebase-adminsdk-fbsvc-8261178347.json" assert { type: "json" };
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const serviceAccount = require("./automation-4b66d-firebase-adminsdk-fbsvc-8261178347.json");
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -553,6 +556,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

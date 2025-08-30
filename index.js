@@ -162,20 +162,36 @@ app.get(["/webhook", "/webhook/whatsapp", "/webhook/meta"], (req, res) => {
 app.use(express.json());
 
 // ------------- SHOPIFY: orders/create -------------
+// ---------- Shopify webhook (orders/create) ----------
 app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // Optional HMAC verify
+    // verify HMAC (optional)
     if (SHOPIFY_WEBHOOK_SECRET) {
       const hmacHeader = req.get("X-Shopify-Hmac-Sha256") || "";
-      const digest = crypto.createHmac("sha256", SHOPIFY_WEBHOOK_SECRET).update(req.body).digest("base64");
+      const digest = crypto
+        .createHmac("sha256", SHOPIFY_WEBHOOK_SECRET)
+        .update(req.body)
+        .digest("base64");
       if (digest !== hmacHeader) {
         console.warn("❌ Shopify HMAC verification failed");
         return res.sendStatus(401);
       }
     }
 
-    const data = JSON.parse(req.body.toString("utf8"));
-    console.log("🧾 Shopify order created:", data.id);
+    // ✅ Safe parse
+    let data;
+    if (Buffer.isBuffer(req.body)) {
+      data = JSON.parse(req.body.toString("utf8"));
+    } else if (typeof req.body === "string") {
+      data = JSON.parse(req.body);
+    } else {
+      data = req.body; // already object
+    }
+
+    console.log("🧾 Shopify webhook order:", data.id);
+
+    // (rest of your logic remains same...)
+
 
     const checkoutPhone = data.shipping_address?.phone || data.billing_address?.phone || data.customer?.phone;
     const phone = normalizePhone(checkoutPhone);
@@ -522,3 +538,4 @@ app.get("/", (_req, res) => res.send("✅ Service running"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+

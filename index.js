@@ -17,7 +17,7 @@ const {
   STORE_NAME,
   DEFAULT_COUNTRY_CODE = "92",
   SHOPIFY_WEBHOOK_SECRET,
-  SHOPIFY_STOREFRONT_DOMAIN,
+  SHOPIFY_STOREFRONT_DOMAIN = "SILKENROOT.COM",
   DEFAULT_PRODUCT_URL,
   DEFAULT_CHECKOUT_URL,
   PORT = 3000,
@@ -554,3 +554,4 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+

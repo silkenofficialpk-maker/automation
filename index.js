@@ -2,6 +2,8 @@
 import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
+import { db } from "./firebase.js";
+
 
 const app = express();
 
@@ -554,4 +556,5 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 

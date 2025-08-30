@@ -26,6 +26,10 @@ try {
       databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
     });
     console.log("✅ Firebase Admin initialized");
+    console.log("🕒 Server time:", new Date().toISOString());
+console.log("🔑 Using client email:", serviceAccount.client_email);
+console.log("🆔 Key ID:", serviceAccount.private_key_id);
+
 
   const db = admin.database();
 db.ref("test").set({ status: "working", time: new Date().toISOString() })
@@ -581,6 +585,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

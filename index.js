@@ -378,7 +378,6 @@ if (msg.type === "button") {
   // ✅ One place to save meta back
   await orderRef.set(meta);
   console.log("💾 Order updated in DB:", meta);
-}
 });
 
 /* ---------- Courier webhook / fulfillment events ---------- */
@@ -563,6 +562,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

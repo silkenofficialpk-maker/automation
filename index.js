@@ -1,53 +1,21 @@
-// index.js
 import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
+import serviceAccount from "./automation-4b66d-firebase-adminsdk-fbsvc-8261178347.json" assert { type: "json" };
 
-// Parse service account from env
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-
-  // Fix the \n issue in private_key
-  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-
-  // Debug: log first & last 50 chars of private key
-  console.log("🔑 Private key starts with:", serviceAccount.private_key.substring(0, 50));
-  console.log("🔑 Private key ends with:", serviceAccount.private_key.substring(serviceAccount.private_key.length - 50));
-} catch (err) {
-  console.error("❌ Failed to parse service account env variable:", err);
-}
-
-try {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
-    });
-    console.log("✅ Firebase Admin initialized");
-    console.log("🕒 Server time:", new Date().toISOString());
-console.log("🔑 Using client email:", serviceAccount.client_email);
-console.log("🆔 Key ID:", serviceAccount.private_key_id);
-
-
-  const db = admin.database();
-db.ref("test").set({ status: "working", time: new Date().toISOString() })
-  .then(() => console.log("✅ Test write success"))
-  .catch(err => console.error("❌ Test write failed:", err));
-
-    
-  }
-} catch (err) {
-  console.error("❌ Firebase initialization failed:", err);
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
+  });
+  console.log("✅ Firebase Admin initialized");
 }
 
 export const db = admin.database();
 
-
-
-
 const app = express();
+app.use(express.json());
 
 /**
  * ENV / CONFIG
@@ -585,6 +553,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

@@ -6,45 +6,27 @@ import crypto from "crypto";
 const app = express();
 
 /**
- * Required ENV
- * ----------
- * WHATSAPP_NUMBER_ID
- * WHATSAPP_TOKEN
- * SHOPIFY_SHOP                  e.g. mystore.myshopify.com
- * SHOPIFY_ACCESS_TOKEN
- * VERIFY_TOKEN_META             e.g. "shopify123"
- *
- * Optional (strongly recommended)
- * ----------
- * STORE_NAME                    Friendly store name (fallback: SHOPIFY_SHOP)
- * DEFAULT_COUNTRY_CODE          default "92"
- * SHOPIFY_WEBHOOK_SECRET        if using HMAC (optional)
- * SHOPIFY_STOREFRONT_DOMAIN     e.g. mystore.com  (for product/review links)
- * DEFAULT_PRODUCT_URL           fallback product page url if handle absent
- * DEFAULT_CHECKOUT_URL          fallback checkout url for abandoned
- *
- * PORT                          default 3000
+ * ENV / CONFIG
  */
-
 const {
   WHATSAPP_NUMBER_ID,
   WHATSAPP_TOKEN,
   SHOPIFY_SHOP,
   SHOPIFY_ACCESS_TOKEN,
   VERIFY_TOKEN_META = "shopify123",
-
   STORE_NAME,
   DEFAULT_COUNTRY_CODE = "92",
   SHOPIFY_WEBHOOK_SECRET,
-
-  SHOPIFY_STOREFRONT_DOMAIN,     // e.g. mystore.com
-  DEFAULT_PRODUCT_URL,           // e.g. https://mystore.com/collections/all
-  DEFAULT_CHECKOUT_URL,          // e.g. https://mystore.com/cart
-
+  SHOPIFY_STOREFRONT_DOMAIN,
+  DEFAULT_PRODUCT_URL,
+  DEFAULT_CHECKOUT_URL,
   PORT = 3000,
 } = process.env;
 
-// Template names (LOCKED per your list)
+/**
+ * TEMPLATE NAMES (LOCKED as per your data)
+ * Keep these exactly as you created in Meta
+ */
 const TPL = {
   ORDER_CONFIRMATION: "order_confirmation",
   ORDER_CONFIRMED_REPLY: "order_confirmed_reply",
@@ -58,17 +40,46 @@ const TPL = {
   ABANDONED_CHECKOUT: "abandoned_checkout",
   FEEDBACK_REQUEST: "request",
   YOUR_ORDER_IS_SHIPPED: "your_order_is_shipped_2025",
+  ORDER_PLACED: "order_placed" // optional
 };
 
 if (!WHATSAPP_NUMBER_ID || !WHATSAPP_TOKEN || !SHOPIFY_SHOP || !SHOPIFY_ACCESS_TOKEN) {
-  console.error("❌ Missing required env. Set WHATSAPP_NUMBER_ID, WHATSAPP_TOKEN, SHOPIFY_SHOP, SHOPIFY_ACCESS_TOKEN.");
+  console.error("❌ Missing required env vars. Set WHATSAPP_NUMBER_ID, WHATSAPP_TOKEN, SHOPIFY_SHOP, SHOPIFY_ACCESS_TOKEN.");
   process.exit(1);
 }
 
-const recentOrders = new Map(); // phone -> { orderId, createdAt }
-const msgToOrder = new Map();   // waMessageId -> orderId (optional)
+/**
+ * Button payload strings
+ * If your Meta templates use different payload text, update these values.
+ * Keep payload naming consistent across Meta template and code.
+ */
+const PAYLOADS = {
+  CONFIRM_ORDER: "CONFIRM_ORDER",
+  CANCEL_ORDER: "CANCEL_ORDER",
+  DELIVERED_OK: "DELIVERED_OK",
+  NEED_HELP: "NEED_HELP",
+  REDELIVER_TOMORROW: "REDELIVER_TOMORROW",
+  CANCEL_ORDER_RETURN: "CANCEL_ORDER_RETURN",
+  TRY_AGAIN: "TRY_AGAIN",
+  CANCEL_FAILED: "CANCEL_FAILED",
+  RET_WRONG_ADDRESS: "RET_WRONG_ADDRESS",
+  RET_NOT_AVAILABLE: "RET_NOT_AVAILABLE",
+  RET_CHANGED_MIND: "RET_CHANGED_MIND",
+  RET_CONTACT_SUPPORT: "RET_CONTACT_SUPPORT",
+  CONFIRM_AVAILABLE_TODAY: "CONFIRM_AVAILABLE_TODAY",
+  RETRY_DELIVERY: "RETRY_DELIVERY",
+};
 
-// ---------- Helpers ----------
+/**
+ * In-memory stores (demo). Use DB for production.
+ * - orderMeta: orderId -> { phone, name, createdAt, status }
+ * - recentOrders: phone -> orderId (latest) (for mapping incoming WA messages)
+ */
+const orderMeta = new Map();
+const recentOrders = new Map();
+const msgToOrder = new Map();
+
+/* ---------- Helpers ---------- */
 function normalizePhone(raw, defaultCC = DEFAULT_COUNTRY_CODE) {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, "");
@@ -80,73 +91,62 @@ function normalizePhone(raw, defaultCC = DEFAULT_COUNTRY_CODE) {
 }
 
 async function sendWhatsAppTemplate(to, templateName, components = [], lang = "en") {
-  const url = `https://graph.facebook.com/v19.0/${WHATSAPP_NUMBER_ID}/messages`;
-  const body = {
-    messaging_product: "whatsapp",
-    to,
-    type: "template",
-    template: { name: templateName, language: { code: lang }, components },
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
-  if (!res.ok) {
-    console.error("❌ WhatsApp API error:", res.status, JSON.stringify(json));
-  } else {
-    console.log("✅ WhatsApp API OK:", JSON.stringify(json));
+  try {
+    const url = `https://graph.facebook.com/v19.0/${WHATSAPP_NUMBER_ID}/messages`;
+    const body = {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: { name: templateName, language: { code: lang }, components },
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok) console.error("❌ WhatsApp API error:", res.status, json);
+    else console.log("✅ sent template", templateName, "to", to, "=>", JSON.stringify(json));
+    return json;
+  } catch (err) {
+    console.error("❌ sendWhatsAppTemplate error:", err);
+    throw err;
   }
-  return json;
 }
 
 async function updateShopifyOrderNote(orderId, noteText) {
-  const url = `https://${SHOPIFY_SHOP}/admin/api/2023-10/orders/${orderId}.json`;
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ order: { id: orderId, note: noteText } }),
-  });
-  const json = await res.json();
-  if (!res.ok) {
-    console.error("❌ Shopify update error:", res.status, json);
-  } else {
-    console.log("✅ Shopify order note updated:", json?.order?.id);
+  try {
+    const url = `https://${SHOPIFY_SHOP}/admin/api/2023-10/orders/${orderId}.json`;
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ order: { id: orderId, note: noteText } }),
+    });
+    const json = await res.json();
+    if (!res.ok) console.error("❌ Shopify update error:", res.status, json);
+    else console.log("✅ Shopify note updated for", orderId);
+    return json;
+  } catch (err) {
+    console.error("❌ updateShopifyOrderNote error:", err);
+    throw err;
   }
-  return json;
 }
 
-// Build URLs (best-effort fallbacks)
 function buildProductUrl(lineItem) {
-  // If we have storefront domain + product handle (not in all webhooks)
-  const handle = lineItem?.handle; // rarely present in order webhook
-  if (handle && SHOPIFY_STOREFRONT_DOMAIN) {
-    return `https://${SHOPIFY_STOREFRONT_DOMAIN}/products/${handle}`;
-  }
-  // fallback configured
+  const handle = lineItem?.handle;
+  if (handle && SHOPIFY_STOREFRONT_DOMAIN) return `https://${SHOPIFY_STOREFRONT_DOMAIN}/products/${handle}`;
   return DEFAULT_PRODUCT_URL || (SHOPIFY_STOREFRONT_DOMAIN ? `https://${SHOPIFY_STOREFRONT_DOMAIN}` : `https://${SHOPIFY_SHOP}`);
 }
-
-function buildCheckoutUrl(data) {
-  // If you capture checkout_url in app/db, plug here. Else fallback:
+function buildCheckoutUrl() {
   return DEFAULT_CHECKOUT_URL || (SHOPIFY_STOREFRONT_DOMAIN ? `https://${SHOPIFY_STOREFRONT_DOMAIN}/cart` : `https://${SHOPIFY_SHOP}`);
 }
-
 function buildTrackingUrl(trackingUrl, trackingNumber) {
   if (trackingUrl) return trackingUrl;
-  if (trackingNumber) {
-    // generic fallback tracker page pattern (adjust to your courier)
-    return `https://${SHOPIFY_STOREFRONT_DOMAIN || SHOPIFY_SHOP}/apps/track?tn=${encodeURIComponent(trackingNumber)}`;
-  }
+  if (trackingNumber) return `https://${SHOPIFY_STOREFRONT_DOMAIN || SHOPIFY_SHOP}/apps/track?tn=${encodeURIComponent(trackingNumber)}`;
   return `https://${SHOPIFY_STOREFRONT_DOMAIN || SHOPIFY_SHOP}/pages/track-order`;
 }
 
-// ------------- WEBHOOK VERIFY (Meta) -------------
+/* ---------- Webhook verify (Meta) ---------- */
 app.get(["/webhook", "/webhook/whatsapp", "/webhook/meta"], (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -158,40 +158,39 @@ app.get(["/webhook", "/webhook/whatsapp", "/webhook/meta"], (req, res) => {
   return res.sendStatus(403);
 });
 
-// Parse JSON for non-Shopify
+/* ---------- Body parsers ---------- */
+// We use express.raw for Shopify route below so don't app.use(express.json()) globally before that.
+// But we will enable json for other routes:
+app.use((req, res, next) => {
+  // do not parse raw Shopify POST (we set raw for that route)
+  next();
+});
 app.use(express.json());
 
-// ------------- SHOPIFY: orders/create -------------
-// ---------- Shopify webhook (orders/create) ----------
+/* ---------- Safe parse helper for Shopify raw body ---------- */
+function parseShopifyRaw(req) {
+  if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+    return JSON.parse(req.body.toString("utf8"));
+  }
+  if (typeof req.body === "string") return JSON.parse(req.body);
+  return req.body;
+}
+
+/* ---------- SHOPIFY: orders/create ---------- */
 app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (req, res) => {
   try {
-    // verify HMAC (optional)
+    // Optional HMAC verify
     if (SHOPIFY_WEBHOOK_SECRET) {
       const hmacHeader = req.get("X-Shopify-Hmac-Sha256") || "";
-      const digest = crypto
-        .createHmac("sha256", SHOPIFY_WEBHOOK_SECRET)
-        .update(req.body)
-        .digest("base64");
+      const digest = crypto.createHmac("sha256", SHOPIFY_WEBHOOK_SECRET).update(req.body).digest("base64");
       if (digest !== hmacHeader) {
         console.warn("❌ Shopify HMAC verification failed");
         return res.sendStatus(401);
       }
     }
 
-    // ✅ Safe parse
-    let data;
-    if (Buffer.isBuffer(req.body)) {
-      data = JSON.parse(req.body.toString("utf8"));
-    } else if (typeof req.body === "string") {
-      data = JSON.parse(req.body);
-    } else {
-      data = req.body; // already object
-    }
-
-    console.log("🧾 Shopify webhook order:", data.id);
-
-    // (rest of your logic remains same...)
-
+    const data = parseShopifyRaw(req);
+    console.log("🧾 Shopify order created:", data.id);
 
     const checkoutPhone = data.shipping_address?.phone || data.billing_address?.phone || data.customer?.phone;
     const phone = normalizePhone(checkoutPhone);
@@ -200,12 +199,8 @@ app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (r
       return res.status(200).send("No phone — ignoring");
     }
 
-    // Extract fields (strictly matching your locked template orders)
-    const firstName =
-      data.customer?.first_name ||
-      data.billing_address?.first_name ||
-      data.shipping_address?.first_name ||
-      "Customer";
+    // Extract fields (match your locked template variable order)
+    const firstName = data.customer?.first_name || data.billing_address?.first_name || data.shipping_address?.first_name || "Customer";
     const orderId = data.id;
     const total = String(data.total_price || data.subtotal_price || "0");
     const currency = data.currency || data.total_price_set?.shop_money?.currency_code || "PKR";
@@ -214,21 +209,30 @@ app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (r
     const quantity = String(firstLine?.quantity || 1);
     const storeName = STORE_NAME || SHOPIFY_SHOP;
 
-    // map phone -> order
-    recentOrders.set(phone, { orderId, createdAt: Date.now() });
+    // store order meta (for reminder + mapping)
+    orderMeta.set(orderId, {
+      phone,
+      name: firstName,
+      createdAt: Date.now(),
+      status: "pending", // pending / confirmed / cancelled
+      product: firstProduct,
+      qty: quantity,
+      total,
+      currency,
+    });
+    recentOrders.set(phone, orderId);
 
-    // ===== Send order_confirmation =====
-    // Hello {{1}}, your order #{{2}} of {{3}} ({{4}}) from {{5}} worth {{6}} {{7}} has been placed. Please confirm…
+    // Build components for order_confirmation (exact placeholders order)
     const components = [{
       type: "body",
       parameters: [
-        { type: "text", text: firstName },        // {{1}}
-        { type: "text", text: String(orderId) },  // {{2}}
-        { type: "text", text: firstProduct },     // {{3}}
-        { type: "text", text: quantity },         // {{4}}
-        { type: "text", text: storeName },        // {{5}}
-        { type: "text", text: total },            // {{6}}
-        { type: "text", text: currency },         // {{7}}
+        { type: "text", text: firstName },        // {{1}} Customer First Name
+        { type: "text", text: String(orderId) },  // {{2}} Order ID
+        { type: "text", text: firstProduct },     // {{3}} Product Name
+        { type: "text", text: quantity },         // {{4}} Quantity
+        { type: "text", text: storeName },        // {{5}} Store Name
+        { type: "text", text: total },            // {{6}} Total Price
+        { type: "text", text: currency },         // {{7}} Currency
       ],
     }];
 
@@ -238,6 +242,7 @@ app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (r
 
     await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.ORDER_CONFIRMATION} (msgId: ${msgId || "N/A"})`);
 
+    // Respond 200 to Shopify
     return res.status(200).send("OK");
   } catch (err) {
     console.error("❌ Shopify webhook handler error:", err);
@@ -245,124 +250,118 @@ app.post("/webhook/shopify", express.raw({ type: "application/json" }), async (r
   }
 });
 
-// ------------- WHATSAPP: incoming/status/button -------------
+/* ---------- WA WEBHOOK (messages + statuses + buttons) ---------- */
 app.post("/webhook/whatsapp", async (req, res) => {
   try {
-    console.log("📲 WA webhook payload:", JSON.stringify(req.body, null, 2));
-    res.sendStatus(200); // ACK fast
+    console.log("📲 WA webhook:", JSON.stringify(req.body, null, 2));
+    res.sendStatus(200); // ack quickly
 
     const entry = req.body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
     if (!value) return;
 
-    // Status receipts
+    // handle statuses (delivery receipts)
     if (Array.isArray(value.statuses)) {
-      // Map back to order if we stored msgId
       value.statuses.forEach(s => {
         const oid = msgToOrder.get(s.id);
-        if (oid) console.log(`🔔 Status ${s.status} for order ${oid}`);
+        if (oid) console.log(`🔔 status ${s.status} for order ${oid}`);
       });
       return;
     }
 
-    // Incoming messages / button replies
     const msg = value.messages?.[0];
     if (!msg) return;
+    console.log("✉️ Incoming WA message:", msg);
 
-    const from = msg.from; // 923xxxxxxxxx
-    const mapped = recentOrders.get(from) || recentOrders.get(normalizePhone(from));
-    const orderId = mapped?.orderId;
+    const from = msg.from; // customer's wa id (e.g. 92300...)
+    const phone = normalizePhone(from);
+    const orderId = recentOrders.get(phone) || [...orderMeta.entries()].find(([k,v])=>v.phone===phone)?.[0];
 
-    // Only handle interactive button payloads defined below
+    if (!orderId) {
+      console.warn("⚠️ No mapped order for incoming WA from", phone);
+      return;
+    }
+
+    // handle interactive button types
     if (msg.type === "button") {
       const payload = msg.button?.payload;
-      if (!orderId) {
-        console.warn("⚠️ No order mapped for", from, "payload:", payload);
-        return;
-      }
+      console.log("🔘 Button payload:", payload, "from", phone, "order", orderId);
 
+      // update meta to prevent scheduled reminders if confirmed/cancelled
+      const meta = orderMeta.get(orderId) || {};
       switch (payload) {
-        case "CONFIRM_ORDER": {
+        case PAYLOADS.CONFIRM_ORDER:
+          meta.status = "confirmed";
+          orderMeta.set(orderId, meta);
           await updateShopifyOrderNote(orderId, "✅ Order Confirmed via WhatsApp");
-          // order_confirmed_reply: Thanks {{1}} — your order #{{2}} is confirmed...
-          const name = "Customer"; // we can’t access order JSON here; OK to use generic or cache name too
-          await sendWhatsAppTemplate(from, TPL.ORDER_CONFIRMED_REPLY, [{
+          // send order_confirmed_reply
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, [{
             type: "body",
             parameters: [
-              { type: "text", text: name },               // {{1}}
-              { type: "text", text: String(orderId) },    // {{2}}
+              { type: "text", text: meta.name || "Customer" }, // {{1}}
+              { type: "text", text: String(orderId) },         // {{2}}
             ],
           }]);
+          // schedule dispatch reminder is handled by periodic job (or you can trigger immediately)
           break;
-        }
 
-        case "CANCEL_ORDER": {
+        case PAYLOADS.CANCEL_ORDER:
+          meta.status = "cancelled";
+          orderMeta.set(orderId, meta);
           await updateShopifyOrderNote(orderId, "❌ Order Cancelled via WhatsApp");
-          // order_cancelled_reply_auto: Your order #{{1}} has been cancelled as requested.
-          await sendWhatsAppTemplate(from, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
             type: "body",
             parameters: [{ type: "text", text: String(orderId) }], // {{1}}
           }]);
           break;
-        }
 
-        case "DELIVERED_OK": {
-          await updateShopifyOrderNote(orderId, "✅ Customer marked delivered OK");
+        case PAYLOADS.DELIVERED_OK:
+          await updateShopifyOrderNote(orderId, "✅ Customer confirmed delivery OK");
           break;
-        }
-        case "NEED_HELP": {
-          await updateShopifyOrderNote(orderId, "🆘 Customer needs help");
-          break;
-        }
 
-        case "RETRY_DELIVERY":
-        case "REDELIVER_TOMORROW": {
-          await updateShopifyOrderNote(orderId, "🚚 Redelivery requested");
-          // redelivery_scheduled requires: order id, day, time, courier, total, currency
-          const day = "Tomorrow";
-          const time = "10am–6pm";
-          const courier = "Courier";
-          const total = "—";
-          const currency = "PKR";
-          await sendWhatsAppTemplate(from, TPL.REDELIVERY_SCHEDULED, [{
+        case PAYLOADS.NEED_HELP:
+          await updateShopifyOrderNote(orderId, "🆘 Customer needs help after delivery");
+          // You might want to send a follow-up or create support ticket here
+          break;
+
+        case PAYLOADS.REDELIVER_TOMORROW:
+        case PAYLOADS.RETRY_DELIVERY:
+          await updateShopifyOrderNote(orderId, "🚚 Redelivery requested by customer");
+          // send redelivery_scheduled sample (you should set actual day/time)
+          await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, [{
             type: "body",
             parameters: [
-              { type: "text", text: String(orderId) }, // {{1}}
-              { type: "text", text: day },             // {{2}}
-              { type: "text", text: time },            // {{3}}
-              { type: "text", text: courier },         // {{4}}
-              { type: "text", text: total },           // {{5}}
-              { type: "text", text: currency },        // {{6}}
+              { type: "text", text: String(orderId) },
+              { type: "text", text: "Tomorrow" },
+              { type: "text", text: "10am–6pm" },
+              { type: "text", text: "Courier" },
+              { type: "text", text: meta.total || "—" },
+              { type: "text", text: meta.currency || "PKR" },
             ],
           }]);
           break;
-        }
 
-        case "CANCEL_ORDER_RETURN":
-        case "CANCEL": {
+        case PAYLOADS.CANCEL_ORDER_RETURN:
+        case PAYLOADS.CANCEL_FAILED:
+        case PAYLOADS.CANCEL:
           await updateShopifyOrderNote(orderId, "❌ Customer requested cancel/return on failed delivery");
-          // order_cancelled_reply_auto
-          await sendWhatsAppTemplate(from, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
             type: "body",
-            parameters: [{ type: "text", text: String(orderId) }],
+            parameters: [{ type: "text", text: String(orderId) }], // {{1}}
           }]);
           break;
-        }
 
-        case "CONFIRM_AVAILABLE_TODAY": {
-          await updateShopifyOrderNote(orderId, "✅ Customer available for delivery today");
-          break;
-        }
-
-        // Return reason capture
-        case "RET_WRONG_ADDRESS":
-        case "RET_NOT_AVAILABLE":
-        case "RET_CHANGED_MIND":
-        case "RET_CONTACT_SUPPORT": {
+        case PAYLOADS.RET_WRONG_ADDRESS:
+        case PAYLOADS.RET_NOT_AVAILABLE:
+        case PAYLOADS.RET_CHANGED_MIND:
+        case PAYLOADS.RET_CONTACT_SUPPORT:
           await updateShopifyOrderNote(orderId, `↩️ Return reason: ${payload}`);
           break;
-        }
+
+        case PAYLOADS.CONFIRM_AVAILABLE_TODAY:
+          await updateShopifyOrderNote(orderId, "✅ Customer available for delivery today");
+          break;
 
         default:
           await updateShopifyOrderNote(orderId, `ℹ️ User action: ${payload}`);
@@ -373,169 +372,185 @@ app.post("/webhook/whatsapp", async (req, res) => {
   }
 });
 
-// ------------- COURIER / FULFILLMENT EVENTS -------------
-// Send shipped / attempted / delivered updates here from your courier webhook OR your own job.
+/* ---------- Courier webhook / fulfillment events ---------- */
 app.post("/webhook/courier", express.json(), async (req, res) => {
   try {
     const p = req.body;
     console.log("🚚 Courier event:", JSON.stringify(p, null, 2));
-    // Expecting at least: phone, orderId, status, tracking_url?, tracking_no?, courier?, product_title?, price?, currency?
     const phone = normalizePhone(p.phone);
     const orderId = p.orderId;
     if (!phone || !orderId) return res.sendStatus(200);
 
-    // cache mapping for reply flow if not present
-    if (!recentOrders.get(phone)) recentOrders.set(phone, { orderId, createdAt: Date.now() });
+    if (!recentOrders.get(phone)) recentOrders.set(phone, orderId);
+    const meta = orderMeta.get(orderId) || {};
+    meta.phone = phone;
+    meta.name = meta.name || p.name || "Customer";
+    meta.product = meta.product || p.product_title;
+    meta.total = meta.total || p.price;
+    meta.currency = meta.currency || p.currency || "PKR";
+    orderMeta.set(orderId, meta);
 
-    // Compute variables
     const trackingUrl = buildTrackingUrl(p.tracking_url, p.tracking_no);
-    const name = p.name || "Customer";
-    const productTitle = p.product_title || "Product";
-    const price = p.price || "—";
-    const currency = p.currency || "PKR";
-    const courier = p.courier || "Courier";
 
     switch ((p.status || "").toLowerCase()) {
-      case "shipped": {
-        // your_order_is_shipped_2025: body {{1}} = order id; URL button param {{1}} = trackingUrl
-        const components = [
-          {
-            type: "body",
-            parameters: [{ type: "text", text: String(orderId) }], // {{1}}
-          },
-          // If your template has URL button with a variable:
+      case "shipped":
+        // your_order_is_shipped_2025 — body {{1}} = order id ; URL button param = trackingUrl
+        await sendWhatsAppTemplate(phone, TPL.YOUR_ORDER_IS_SHIPPED, [
+          { type: "body", parameters: [{ type: "text", text: String(orderId) }] },
           {
             type: "button",
             sub_type: "url",
             index: "0",
-            parameters: [{ type: "text", text: trackingUrl }], // {{1}} for URL button
+            parameters: [{ type: "text", text: trackingUrl }],
           },
-        ];
-        await sendWhatsAppTemplate(phone, TPL.YOUR_ORDER_IS_SHIPPED, components);
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.YOUR_ORDER_IS_SHIPPED}`);
         break;
-      }
 
-      case "attempted": {
-        // delivery_attempted: name, order id + buttons (Redeliver Tomorrow / Cancel Order / Return)
-        const components = [{
-          type: "body",
-          parameters: [
-            { type: "text", text: name },              // {{1}}
-            { type: "text", text: String(orderId) },   // {{2}}
-          ],
-        }];
-        await sendWhatsAppTemplate(phone, TPL.DELIVERY_ATTEMPTED, components);
+      case "attempted":
+        await sendWhatsAppTemplate(phone, TPL.DELIVERY_ATTEMPTED, [
+          { type: "body", parameters: [{ type: "text", text: meta.name || "Customer" }, { type: "text", text: String(orderId) }] },
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.DELIVERY_ATTEMPTED}`);
         break;
-      }
 
-      case "pending": {
-        // failed_delivery_followup: name, order id (Try Again / Cancel)
-        const components = [{
-          type: "body",
-          parameters: [
-            { type: "text", text: name },              // {{1}}
-            { type: "text", text: String(orderId) },   // {{2}}
-          ],
-        }];
-        await sendWhatsAppTemplate(phone, TPL.FAILED_DELIVERY_FOLLOWUP, components);
+      case "pending":
+        await sendWhatsAppTemplate(phone, TPL.FAILED_DELIVERY_FOLLOWUP, [
+          { type: "body", parameters: [{ type: "text", text: meta.name || "Customer" }, { type: "text", text: String(orderId) }] },
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.FAILED_DELIVERY_FOLLOWUP}`);
         break;
-      }
 
-      case "delivered": {
-        // order_delivered: name, order id (Yes all good / Need help)
-        const components = [{
-          type: "body",
-          parameters: [
-            { type: "text", text: name },              // {{1}}
-            { type: "text", text: String(orderId) },   // {{2}}
-          ],
-        }];
-        await sendWhatsAppTemplate(phone, TPL.ORDER_DELIVERED, components);
+      case "delivered":
+        await sendWhatsAppTemplate(phone, TPL.ORDER_DELIVERED, [
+          { type: "body", parameters: [{ type: "text", text: meta.name || "Customer" }, { type: "text", text: String(orderId) }] },
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.ORDER_DELIVERED}`);
-        // Optional: feedback template after delivered
-        const productUrl = buildProductUrl({}); // best-effort
+        // optional feedback prompt
         await sendWhatsAppTemplate(phone, TPL.FEEDBACK_REQUEST, [
-          { type: "body", parameters: [{ type: "text", text: name }] }, // {{1}}
+          { type: "body", parameters: [{ type: "text", text: meta.name || "Customer" }] },
           {
             type: "button",
             sub_type: "url",
             index: "0",
-            parameters: [{ type: "text", text: productUrl }], // {{1}} URL param
+            parameters: [{ type: "text", text: buildProductUrl({ handle: p.product_handle }) }],
           },
         ]);
         break;
-      }
 
       case "rto":
-      case "return_initiated": {
-        // return_initiated_cust: order id; buttons with reasons
-        const components = [{
-          type: "body",
-          parameters: [{ type: "text", text: String(orderId) }], // {{1}}
-        }];
-        await sendWhatsAppTemplate(phone, TPL.RETURN_INITIATED_CUST, components);
+      case "return_initiated":
+        await sendWhatsAppTemplate(phone, TPL.RETURN_INITIATED_CUST, [
+          { type: "body", parameters: [{ type: "text", text: String(orderId) }] },
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.RETURN_INITIATED_CUST}`);
         break;
-      }
 
-      case "dispatch_reminder": {
-        // order_dispatch_reminder: name, order id, product name
-        const components = [{
-          type: "body",
-          parameters: [
-            { type: "text", text: name },                // {{1}}
-            { type: "text", text: String(orderId) },     // {{2}}
-            { type: "text", text: productTitle },        // {{3}}
-          ],
-        }];
-        await sendWhatsAppTemplate(phone, TPL.ORDER_DISPATCH_REMINDER, components);
+      case "dispatch_reminder":
+        await sendWhatsAppTemplate(phone, TPL.ORDER_DISPATCH_REMINDER, [
+          { type: "body", parameters: [{ type: "text", text: meta.name || "Customer" }, { type: "text", text: String(orderId) }, { type: "text", text: meta.product || "Product" }] },
+        ]);
         await updateShopifyOrderNote(orderId, `WhatsApp: sent ${TPL.ORDER_DISPATCH_REMINDER}`);
         break;
-      }
 
       default:
-        console.log("ℹ️ Unhandled courier status:", p.status);
+        console.log("ℹ️ Unknown courier status:", p.status);
     }
 
     res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Courier webhook handler error:", err);
+    console.error("❌ courier webhook error:", err);
     res.sendStatus(500);
   }
 });
 
-// ------------- ABANDONED CHECKOUT TRIGGER (optional) -------------
-// If you wire Shopify "carts/update" or your own cron — call this.
+/* ---------- Abandoned checkout trigger (manual) ---------- */
 app.post("/trigger/abandoned", express.json(), async (req, res) => {
   try {
     const { phone, name, checkout_url } = req.body;
     const to = normalizePhone(phone);
     if (!to) return res.status(400).json({ error: "phone required" });
-
-    const url = checkout_url || buildCheckoutUrl({});
-    const components = [
-      { type: "body", parameters: [{ type: "text", text: name || "Friend" }] }, // {{1}}
-      {
-        type: "button",
-        sub_type: "url",
-        index: "0",
-        parameters: [{ type: "text", text: url }], // {{1}} URL param
-      },
-    ];
-    await sendWhatsAppTemplate(to, TPL.ABANDONED_CHECKOUT, components);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.sendStatus(500);
+    const url = checkout_url || buildCheckoutUrl();
+    await sendWhatsAppTemplate(to, TPL.ABANDONED_CHECKOUT, [
+      { type: "body", parameters: [{ type: "text", text: name || "Friend" }] },
+      { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: url }] },
+    ]);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ trigger/abandoned error:", err);
+    return res.sendStatus(500);
   }
 });
 
-// Health
-app.get("/", (_req, res) => res.send("✅ Service running"));
+/* ---------- Periodic job: reminders (runs every minute) ----------
+   - Checks orderMeta for pending orders older than 6 hours and not confirmed/cancelled,
+   - Sends second confirmation reminder (you must have template approved: could reuse order_confirmation or create a reminder template)
+*/
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const REMINDER_INTERVAL_MS = 60 * 1000; // every 60s for demo; adjust lower frequency in prod
+
+setInterval(async () => {
+  try {
+    const now = Date.now();
+    for (const [orderId, meta] of orderMeta.entries()) {
+      if (!meta || !meta.createdAt) continue;
+      if (meta.status === "pending" && now - meta.createdAt > SIX_HOURS_MS && !meta.reminderSent) {
+        // send second confirmation (we'll reuse ORDER_CONFIRMATION template for reminder)
+        const to = meta.phone;
+        if (!to) continue;
+        const components = [{
+          type: "body",
+          parameters: [
+            { type: "text", text: meta.name || "Customer" },
+            { type: "text", text: String(orderId) },
+            { type: "text", text: meta.product || "Product" },
+            { type: "text", text: meta.qty || "1" },
+            { type: "text", text: meta.store || STORE_NAME || SHOPIFY_SHOP },
+            { type: "text", text: meta.total || "—" },
+            { type: "text", text: meta.currency || "PKR" },
+          ],
+        }];
+        console.log("⏰ Sending 2nd confirmation reminder for order", orderId);
+        await sendWhatsAppTemplate(to, TPL.ORDER_CONFIRMATION, components);
+        await updateShopifyOrderNote(orderId, "WhatsApp: 2nd confirmation reminder sent");
+        meta.reminderSent = true;
+        orderMeta.set(orderId, meta);
+      }
+    }
+  } catch (err) {
+    console.error("❌ Reminder interval error:", err);
+  }
+}, REMINDER_INTERVAL_MS);
+
+/* ---------- Health & demo ---------- */
+app.get("/", (_req, res) => res.send("✅ Automation service running"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+// Demo send (manual test)
+app.get("/demo/send", async (req, res) => {
+  try {
+    const to = normalizePhone(req.query.to || "");
+    if (!to) return res.status(400).json({ error: "Provide ?to=923XXXXXXXXX" });
+    const orderId = `TEST-${Date.now()}`;
+    const components = [{
+      type: "body",
+      parameters: [
+        { type: "text", text: "TestUser" },
+        { type: "text", text: orderId },
+        { type: "text", text: "Sample Product" },
+        { type: "text", text: "1" },
+        { type: "text", text: STORE_NAME || SHOPIFY_SHOP },
+        { type: "text", text: "1000" },
+        { type: "text", text: "PKR" },
+      ],
+    }];
+    await sendWhatsAppTemplate(to, TPL.ORDER_CONFIRMATION, components);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error" });
+  }
+});
 
+/* ---------- Start server ---------- */
+app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));

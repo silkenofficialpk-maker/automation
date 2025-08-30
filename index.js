@@ -298,21 +298,24 @@ app.post("/webhook/whatsapp", async (req, res) => {
       return;
     }
 
-    // handle interactive button types
+ // handle interactive button types
 if (msg.type === "button") {
   const payload = msg.button?.payload;
   console.log("🔘 Button payload:", payload, "from", phone, "order", orderId);
 
   const orderRef = db.ref("orders").child(orderId);
-  const snapshot = await orderRef.get();
+
+  // ✅ FIX: use once("value") in Admin SDK
+  const snapshot = await orderRef.once("value");
+
   let meta = snapshot.exists() ? snapshot.val() : {};
   meta.phone = phone;
   meta.updatedAt = Date.now();
 
-  switch (payload) {
-    case PAYLOADS.CONFIRM_ORDER:
+  // Helper for Shopify + WhatsApp
+  const actions = {
+    [PAYLOADS.CONFIRM_ORDER]: async () => {
       meta.status = "confirmed";
-      await orderRef.set(meta);
       await updateShopifyOrderNote(orderId, "✅ Order Confirmed via WhatsApp");
       await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, [{
         type: "body",
@@ -321,34 +324,29 @@ if (msg.type === "button") {
           { type: "text", text: String(orderId) },
         ],
       }]);
-      break;
+    },
 
-    case PAYLOADS.CANCEL_ORDER:
+    [PAYLOADS.CANCEL_ORDER]: async () => {
       meta.status = "cancelled";
-      await orderRef.set(meta);
       await updateShopifyOrderNote(orderId, "❌ Order Cancelled via WhatsApp");
       await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
         type: "body",
         parameters: [{ type: "text", text: String(orderId) }],
       }]);
-      break;
+    },
 
-    case PAYLOADS.DELIVERED_OK:
+    [PAYLOADS.DELIVERED_OK]: async () => {
       meta.status = "delivered_ok";
-      await orderRef.set(meta);
       await updateShopifyOrderNote(orderId, "✅ Customer confirmed delivery OK");
-      break;
+    },
 
-    case PAYLOADS.NEED_HELP:
+    [PAYLOADS.NEED_HELP]: async () => {
       meta.status = "need_help";
-      await orderRef.set(meta);
       await updateShopifyOrderNote(orderId, "🆘 Customer needs help after delivery");
-      break;
+    },
 
-    case PAYLOADS.REDELIVER_TOMORROW:
-    case PAYLOADS.RETRY_DELIVERY:
+    [PAYLOADS.REDELIVER_TOMORROW]: async () => {
       meta.status = "redelivery";
-      await orderRef.set(meta);
       await updateShopifyOrderNote(orderId, "🚚 Redelivery requested by customer");
       await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, [{
         type: "body",
@@ -361,15 +359,27 @@ if (msg.type === "button") {
           { type: "text", text: meta.currency || "PKR" },
         ],
       }]);
-      break;
+    },
 
-    default:
-      meta.status = `action_${payload}`;
-      await orderRef.set(meta);
-      await updateShopifyOrderNote(orderId, `ℹ️ User action: ${payload}`);
+    [PAYLOADS.RETRY_DELIVERY]: async () => {
+      meta.status = "redelivery";
+      await updateShopifyOrderNote(orderId, "🚚 Retry delivery requested by customer");
+    },
+  };
+
+  // Run action if exists, else fallback
+  if (actions[payload]) {
+    await actions[payload]();
+  } else {
+    meta.status = `action_${payload}`;
+    await updateShopifyOrderNote(orderId, `ℹ️ User action: ${payload}`);
   }
+
+  // ✅ One place to save meta back
+  await orderRef.set(meta);
+  console.log("💾 Order updated in DB:", meta);
 }
-  } catch (err) {
+ catch (err) {
     console.error("❌ WA webhook handler error:", err);
   }
 });
@@ -556,6 +566,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

@@ -4,19 +4,35 @@ import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+// Parse service account from env
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
-// fix private_key line breaks
-serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  // Fix the \n issue in private_key
+  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com" // 🔥 use your project id
-  });
+  // Debug: log first & last 50 chars of private key
+  console.log("🔑 Private key starts with:", serviceAccount.private_key.substring(0, 50));
+  console.log("🔑 Private key ends with:", serviceAccount.private_key.substring(serviceAccount.private_key.length - 50));
+} catch (err) {
+  console.error("❌ Failed to parse service account env variable:", err);
 }
 
-const db = admin.database();
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: "https://automation-4b66d.firebaseio.com",
+    });
+    console.log("✅ Firebase Admin initialized");
+  }
+} catch (err) {
+  console.error("❌ Firebase initialization failed:", err);
+}
+
+export const db = admin.database();
+
 
 
 
@@ -558,6 +574,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

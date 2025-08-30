@@ -3,6 +3,19 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import { db } from "./firebase.js";
+import admin from "firebase-admin";
+
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com" // 🔥 use your project id
+  });
+}
+
+const db = admin.database();
+
 
 
 const app = express();
@@ -543,6 +556,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

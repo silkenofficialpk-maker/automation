@@ -26,6 +26,13 @@ try {
       databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
     });
     console.log("✅ Firebase Admin initialized");
+
+  const db = admin.database();
+db.ref("test").set({ status: "working", time: new Date().toISOString() })
+  .then(() => console.log("✅ Test write success"))
+  .catch(err => console.error("❌ Test write failed:", err));
+
+    
   }
 } catch (err) {
   console.error("❌ Firebase initialization failed:", err);
@@ -574,6 +581,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

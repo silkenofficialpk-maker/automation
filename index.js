@@ -286,89 +286,76 @@ app.post("/webhook/whatsapp", async (req, res) => {
     }
 
     // handle interactive button types
-    if (msg.type === "button") {
-      const payload = msg.button?.payload;
-      console.log("🔘 Button payload:", payload, "from", phone, "order", orderId);
+if (msg.type === "button") {
+  const payload = msg.button?.payload;
+  console.log("🔘 Button payload:", payload, "from", phone, "order", orderId);
 
-      // update meta to prevent scheduled reminders if confirmed/cancelled
-      const meta = orderMeta.get(orderId) || {};
-      switch (payload) {
-        case PAYLOADS.CONFIRM_ORDER:
-          meta.status = "confirmed";
-          orderMeta.set(orderId, meta);
-          await updateShopifyOrderNote(orderId, "✅ Order Confirmed via WhatsApp");
-          // send order_confirmed_reply
-          await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, [{
-            type: "body",
-            parameters: [
-              { type: "text", text: meta.name || "Customer" }, // {{1}}
-              { type: "text", text: String(orderId) },         // {{2}}
-            ],
-          }]);
-          // schedule dispatch reminder is handled by periodic job (or you can trigger immediately)
-          break;
+  const orderRef = db.ref("orders").child(orderId);
+  const snapshot = await orderRef.get();
+  let meta = snapshot.exists() ? snapshot.val() : {};
+  meta.phone = phone;
+  meta.updatedAt = Date.now();
 
-        case PAYLOADS.CANCEL_ORDER:
-          meta.status = "cancelled";
-          orderMeta.set(orderId, meta);
-          await updateShopifyOrderNote(orderId, "❌ Order Cancelled via WhatsApp");
-          await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
-            type: "body",
-            parameters: [{ type: "text", text: String(orderId) }], // {{1}}
-          }]);
-          break;
+  switch (payload) {
+    case PAYLOADS.CONFIRM_ORDER:
+      meta.status = "confirmed";
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, "✅ Order Confirmed via WhatsApp");
+      await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, [{
+        type: "body",
+        parameters: [
+          { type: "text", text: meta.name || "Customer" },
+          { type: "text", text: String(orderId) },
+        ],
+      }]);
+      break;
 
-        case PAYLOADS.DELIVERED_OK:
-          await updateShopifyOrderNote(orderId, "✅ Customer confirmed delivery OK");
-          break;
+    case PAYLOADS.CANCEL_ORDER:
+      meta.status = "cancelled";
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, "❌ Order Cancelled via WhatsApp");
+      await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
+        type: "body",
+        parameters: [{ type: "text", text: String(orderId) }],
+      }]);
+      break;
 
-        case PAYLOADS.NEED_HELP:
-          await updateShopifyOrderNote(orderId, "🆘 Customer needs help after delivery");
-          // You might want to send a follow-up or create support ticket here
-          break;
+    case PAYLOADS.DELIVERED_OK:
+      meta.status = "delivered_ok";
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, "✅ Customer confirmed delivery OK");
+      break;
 
-        case PAYLOADS.REDELIVER_TOMORROW:
-        case PAYLOADS.RETRY_DELIVERY:
-          await updateShopifyOrderNote(orderId, "🚚 Redelivery requested by customer");
-          // send redelivery_scheduled sample (you should set actual day/time)
-          await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, [{
-            type: "body",
-            parameters: [
-              { type: "text", text: String(orderId) },
-              { type: "text", text: "Tomorrow" },
-              { type: "text", text: "10am–6pm" },
-              { type: "text", text: "Courier" },
-              { type: "text", text: meta.total || "—" },
-              { type: "text", text: meta.currency || "PKR" },
-            ],
-          }]);
-          break;
+    case PAYLOADS.NEED_HELP:
+      meta.status = "need_help";
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, "🆘 Customer needs help after delivery");
+      break;
 
-        case PAYLOADS.CANCEL_ORDER_RETURN:
-        case PAYLOADS.CANCEL_FAILED:
-        case PAYLOADS.CANCEL:
-          await updateShopifyOrderNote(orderId, "❌ Customer requested cancel/return on failed delivery");
-          await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, [{
-            type: "body",
-            parameters: [{ type: "text", text: String(orderId) }], // {{1}}
-          }]);
-          break;
+    case PAYLOADS.REDELIVER_TOMORROW:
+    case PAYLOADS.RETRY_DELIVERY:
+      meta.status = "redelivery";
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, "🚚 Redelivery requested by customer");
+      await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, [{
+        type: "body",
+        parameters: [
+          { type: "text", text: String(orderId) },
+          { type: "text", text: "Tomorrow" },
+          { type: "text", text: "10am–6pm" },
+          { type: "text", text: "Courier" },
+          { type: "text", text: meta.total || "—" },
+          { type: "text", text: meta.currency || "PKR" },
+        ],
+      }]);
+      break;
 
-        case PAYLOADS.RET_WRONG_ADDRESS:
-        case PAYLOADS.RET_NOT_AVAILABLE:
-        case PAYLOADS.RET_CHANGED_MIND:
-        case PAYLOADS.RET_CONTACT_SUPPORT:
-          await updateShopifyOrderNote(orderId, `↩️ Return reason: ${payload}`);
-          break;
-
-        case PAYLOADS.CONFIRM_AVAILABLE_TODAY:
-          await updateShopifyOrderNote(orderId, "✅ Customer available for delivery today");
-          break;
-
-        default:
-          await updateShopifyOrderNote(orderId, `ℹ️ User action: ${payload}`);
-      }
-    }
+    default:
+      meta.status = `action_${payload}`;
+      await orderRef.set(meta);
+      await updateShopifyOrderNote(orderId, `ℹ️ User action: ${payload}`);
+  }
+}
   } catch (err) {
     console.error("❌ WA webhook handler error:", err);
   }
@@ -556,5 +543,6 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 

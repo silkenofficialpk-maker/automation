@@ -2,7 +2,6 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
-import admin from "firebase-admin";
 
 let serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
@@ -567,6 +566,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

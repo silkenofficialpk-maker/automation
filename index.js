@@ -2,20 +2,23 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
-import { createRequire } from "module";
+import admin from "firebase-admin";
 
-const require = createRequire(import.meta.url);
-const serviceAccount = require("./automation-4b66d-firebase-adminsdk-fbsvc-8261178347.json");
+let serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+
+// Fix private key newlines
+serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
 
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com"
   });
   console.log("✅ Firebase Admin initialized");
 }
 
 export const db = admin.database();
+
 
 const app = express();
 app.use(express.json());
@@ -564,6 +567,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

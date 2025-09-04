@@ -50,29 +50,21 @@ app.get("/", (req, res) => {
 app.get("/test-db", async (req, res) => {
   try {
     const db = admin.database();
-
-    // dummy path
     const ref = db.ref("test_data");
 
-    // write
+    // write dummy
     await ref.set({
       msg: "Hello from Render 🚀",
       ts: Date.now()
     });
 
-    // read back
-    const snapshot = await ref.get();
-    const data = snapshot.val();
-
-    res.json({
-      ok: true,
-      data
-    });
+    res.json({ ok: true, msg: "Write successful ✅" });
   } catch (err) {
     console.error("❌ Firebase test error:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
 
 /**
  * ENV / CONFIG
@@ -618,6 +610,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

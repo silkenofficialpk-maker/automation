@@ -34,7 +34,6 @@ try {
   console.error("❌ Firebase initialization failed:", err);
 }
 
-import { db } from "./firebase.js";
 
 
 // Express app
@@ -611,6 +610,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

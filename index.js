@@ -2,7 +2,6 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import admin from "firebase-admin";
-import { db } from "./firebase.js";
 
 // Parse Firebase service account from env
 let serviceAccount;
@@ -35,6 +34,7 @@ try {
   console.error("❌ Firebase initialization failed:", err);
 }
 
+import { db } from "./firebase.js";
 
 
 // Express app
@@ -611,6 +611,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

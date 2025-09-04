@@ -38,6 +38,13 @@ export const db = admin.database();
 
 // Express app
 
+const app = express();
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("🚀 Server is running & Firebase connected");
+});
+
 /**
  * ENV / CONFIG
  */
@@ -580,15 +587,9 @@ app.get("/demo/send", async (req, res) => {
   }
 });
 
-const app = express();
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("🚀 Server is running & Firebase connected");
-});
-
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

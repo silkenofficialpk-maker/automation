@@ -47,14 +47,19 @@ app.get("/", (req, res) => {
 // 🔹 Firebase test route
 app.get("/test-db", async (req, res) => {
   try {
-    const ref = db.ref("test_data"); // use global db
+    console.log("🟡 /test-db hit at", new Date().toISOString());
 
+    const ref = db.ref("test_data");
+
+    console.log("🟡 Writing to Firebase...");
     await ref.set({
       msg: "Hello from Render 🚀",
       ts: Date.now(),
     });
 
+    console.log("✅ Firebase write successful");
     res.json({ ok: true, msg: "Write successful ✅" });
+
   } catch (err) {
     console.error("❌ Firebase test error:", err);
     res.status(500).json({ ok: false, error: err.message });
@@ -606,6 +611,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

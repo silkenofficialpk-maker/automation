@@ -12,6 +12,10 @@ try {
   firebaseConfig = JSON.parse(
     Buffer.from(firebaseKeyB64, "base64").toString("utf8")
   );
+
+  // 🔹 FIX: Replace escaped \n with real newlines in the private key
+  firebaseConfig.private_key = firebaseConfig.private_key.replace(/\\n/g, "\n");
+
   console.log("✅ Firebase key decoded successfully");
 } catch (err) {
   console.error("❌ Failed to decode FIREBASE_KEY_B64:", err);
@@ -43,6 +47,9 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("Error writing to Firebase");
   }
 });
+
+
+
 
 
 /**
@@ -589,6 +596,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

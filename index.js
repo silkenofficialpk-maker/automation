@@ -1,20 +1,28 @@
 import express from "express";
-import fetch from "node-fetch";
-import crypto from "crypto";
 import admin from "firebase-admin";
-import bodyParser from "body-parser";
 
-// Decode Base64 Firebase key
 const firebaseKeyB64 = process.env.FIREBASE_KEY_B64;
-const firebaseConfig = JSON.parse(
-  Buffer.from(firebaseKeyB64, "base64").toString("utf8")
-);
+
+if (!firebaseKeyB64) {
+  throw new Error("❌ FIREBASE_KEY_B64 environment variable is missing!");
+}
+
+let firebaseConfig;
+try {
+  firebaseConfig = JSON.parse(
+    Buffer.from(firebaseKeyB64, "base64").toString("utf8")
+  );
+  console.log("✅ Firebase key decoded successfully");
+} catch (err) {
+  console.error("❌ Failed to decode FIREBASE_KEY_B64:", err);
+  process.exit(1);
+}
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(firebaseConfig),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com", // ✅ your RTDB URL
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
   });
 }
 
@@ -23,11 +31,8 @@ const db = admin.database();
 const app = express();
 app.use(express.json());
 
-// Test endpoint
 app.get("/test-db", async (req, res) => {
-  console.log("🟡 /test-db hit at", new Date().toISOString());
   try {
-    console.log("🟡 Writing to Firebase...");
     await db.ref("test").set({
       timestamp: Date.now(),
       message: "Hello from Render 🚀",
@@ -38,6 +43,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("Error writing to Firebase");
   }
 });
+
 
 /**
  * ENV / CONFIG
@@ -583,6 +589,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

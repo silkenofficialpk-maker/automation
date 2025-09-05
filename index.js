@@ -1,37 +1,21 @@
 import express from "express";
 import admin from "firebase-admin";
+import fs from "fs";
 
-const firebaseKeyB64 = process.env.FIREBASE_KEY_B64;
-
-if (!firebaseKeyB64) {
-  throw new Error("❌ FIREBASE_KEY_B64 environment variable is missing!");
-}
-
-let firebaseConfig;
-try {
-  firebaseConfig = JSON.parse(
-    Buffer.from(firebaseKeyB64, "base64").toString("utf8")
-  );
-
-  // 🔹 FIX: Replace escaped \n with real newlines in the private key
-  firebaseConfig.private_key = firebaseConfig.private_key.replace(/\\n/g, "\n");
-
-  console.log("✅ Firebase key decoded successfully");
-} catch (err) {
-  console.error("❌ Failed to decode FIREBASE_KEY_B64:", err);
-  process.exit(1);
-}
+// Load service account JSON directly
+const serviceAccount = JSON.parse(
+  fs.readFileSync("./serviceAccountKey.json", "utf8")
+);
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(firebaseConfig),
+    credential: admin.credential.cert(serviceAccount),
     databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
   });
 }
 
 const db = admin.database();
-
 const app = express();
 app.use(express.json());
 
@@ -47,6 +31,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("Error writing to Firebase");
   }
 });
+
 
 
 
@@ -596,6 +581,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

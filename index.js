@@ -35,7 +35,8 @@ try {
   console.error("❌ Firebase initialization failed:", err);
 }
 
-
+// ✅ make db available
+const db = admin.database();
 
 // Express app
 
@@ -611,6 +612,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

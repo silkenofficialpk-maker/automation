@@ -4,68 +4,40 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import bodyParser from "body-parser";
 
-// 🔹 Parse Firebase service account from env
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+// Decode Base64 Firebase key
+const firebaseKeyB64 = process.env.FIREBASE_KEY_B64;
+const firebaseConfig = JSON.parse(
+  Buffer.from(firebaseKeyB64, "base64").toString("utf8")
+);
 
-  console.log("✅ Parsed Firebase key from env");
-  console.log("🔑 Private key starts with:", serviceAccount.private_key.substring(0, 30));
-  console.log("🔑 Private key ends with:", serviceAccount.private_key.substring(serviceAccount.private_key.length - 30));
-} catch (err) {
-  console.error("❌ Failed to parse FIREBASE_KEY env:", err);
+// Initialize Firebase Admin SDK
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(firebaseConfig),
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com", // ✅ your RTDB URL
+  });
 }
 
-// 🔹 Init Firebase Admin
-try {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
-    });
-    console.log("✅ Firebase Admin initialized");
-    console.log("📧 Client email:", serviceAccount.client_email);
-    console.log("🆔 Key ID:", serviceAccount.private_key_id);
-  }
-} catch (err) {
-  console.error("❌ Firebase initialization failed:", err);
-}
-
-// ✅ Global db reference
 const db = admin.database();
 
-// 🔹 Express app
 const app = express();
 app.use(express.json());
 
-// Root
-app.get("/", (req, res) => {
-  res.send("🚀 Server is running & Firebase connected");
-});
-
-// 🔹 Firebase test route
+// Test endpoint
 app.get("/test-db", async (req, res) => {
+  console.log("🟡 /test-db hit at", new Date().toISOString());
   try {
-    console.log("🟡 /test-db hit at", new Date().toISOString());
-
-    const ref = db.ref("test_data");
-
     console.log("🟡 Writing to Firebase...");
-    await ref.set({
-      msg: "Hello from Render 🚀",
-      ts: Date.now(),
+    await db.ref("test").set({
+      timestamp: Date.now(),
+      message: "Hello from Render 🚀",
     });
-
-    console.log("✅ Firebase write successful");
-    res.json({ ok: true, msg: "Write successful ✅" });
-
+    res.send("✅ Successfully wrote to Firebase DB");
   } catch (err) {
-    console.error("❌ Firebase test error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("❌ Firebase write failed:", err);
+    res.status(500).send("Error writing to Firebase");
   }
 });
-
 
 /**
  * ENV / CONFIG
@@ -611,6 +583,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

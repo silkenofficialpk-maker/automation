@@ -61,12 +61,6 @@ app.get("/test-db", async (req, res) => {
   }
 });
 
-// 🔹 Start server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`⚡ Server running on port ${PORT}`);
-});
-
 
 /**
  * ENV / CONFIG
@@ -612,6 +606,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

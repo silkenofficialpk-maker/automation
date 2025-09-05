@@ -1,6 +1,7 @@
 import express from "express";
-import admin from "firebase-admin";
 import fs from "fs";
+import admin from "firebase-admin";
+
 
 // Load service account JSON directly
 const serviceAccount = JSON.parse(
@@ -31,8 +32,6 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("Error writing to Firebase");
   }
 });
-
-
 
 
 
@@ -581,6 +580,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

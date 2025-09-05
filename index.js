@@ -4,12 +4,10 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import bodyParser from "body-parser";
 
-// Parse Firebase service account from env
+// 🔹 Parse Firebase service account from env
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-
-  // Fix private_key newlines
   serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
 
   console.log("✅ Parsed Firebase key from env");
@@ -19,14 +17,13 @@ try {
   console.error("❌ Failed to parse FIREBASE_KEY env:", err);
 }
 
-// Init Firebase Admin
+// 🔹 Init Firebase Admin
 try {
   if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
     });
-
     console.log("✅ Firebase Admin initialized");
     console.log("📧 Client email:", serviceAccount.client_email);
     console.log("🆔 Key ID:", serviceAccount.private_key_id);
@@ -35,29 +32,26 @@ try {
   console.error("❌ Firebase initialization failed:", err);
 }
 
-// ✅ make db available
+// ✅ Global db reference
 const db = admin.database();
 
-// Express app
-
+// 🔹 Express app
 const app = express();
 app.use(express.json());
 
+// Root
 app.get("/", (req, res) => {
   res.send("🚀 Server is running & Firebase connected");
 });
 
-
 // 🔹 Firebase test route
 app.get("/test-db", async (req, res) => {
   try {
-    const db = admin.database();
-    const ref = db.ref("test_data");
+    const ref = db.ref("test_data"); // use global db
 
-    // write dummy
     await ref.set({
       msg: "Hello from Render 🚀",
-      ts: Date.now()
+      ts: Date.now(),
     });
 
     res.json({ ok: true, msg: "Write successful ✅" });
@@ -65,6 +59,12 @@ app.get("/test-db", async (req, res) => {
     console.error("❌ Firebase test error:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// 🔹 Start server
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`⚡ Server running on port ${PORT}`);
 });
 
 
@@ -612,6 +612,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

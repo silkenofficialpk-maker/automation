@@ -12,7 +12,7 @@ const serviceAccount = JSON.parse(
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
   });
 }
 
@@ -580,6 +580,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

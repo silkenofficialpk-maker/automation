@@ -1,9 +1,8 @@
 import express from "express";
-import fs from "fs";
 import admin from "firebase-admin";
+import fs from "fs";
 
-
-// Load service account JSON directly
+// Load service account key directly (no base64)
 const serviceAccount = JSON.parse(
   fs.readFileSync("./serviceAccountKey.json", "utf8")
 );
@@ -12,14 +11,16 @@ const serviceAccount = JSON.parse(
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com/",
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
   });
 }
 
 const db = admin.database();
+
 const app = express();
 app.use(express.json());
 
+// Test Firebase DB write
 app.get("/test-db", async (req, res) => {
   try {
     await db.ref("test").set({
@@ -32,7 +33,6 @@ app.get("/test-db", async (req, res) => {
     res.status(500).send("Error writing to Firebase");
   }
 });
-
 
 
 
@@ -580,6 +580,7 @@ app.get("/demo/send", async (req, res) => {
 
 /* ---------- Start server ---------- */
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

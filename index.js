@@ -19,7 +19,7 @@ try {
     const fileData = fs.readFileSync(servicePath, "utf8");
     console.log("🔥 Using Render service account file:", fileData);
     serviceAccount = JSON.parse(fileData);
-    console.log("🔥 Using  service account file:", serviceAccounth);
+    console.log("🔥 Using  service account file:", serviceAccount);
   } else {
     // 🔥 Use local file for testing
     const localPath = path.join(__dirname, "../firebase-service-account.json");
@@ -1154,6 +1154,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

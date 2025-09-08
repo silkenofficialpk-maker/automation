@@ -14,12 +14,22 @@ console.log("🔥 Using service account path:", serviceAccountPath);
 const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
 console.log("✅ Loaded service account project_id:", serviceAccount.project_id);
 
-if (!admin.apps.length) {
-  admin.initializeApp({
+admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
   });
-}
+
+// Test token generation
+admin
+  .auth()
+  .listUsers(1) // just get one user
+  .then(() => {
+    console.log("✅ Service account is valid and can access Firebase");
+  })
+  .catch((err) => {
+    console.error("❌ Service account failed:", err);
+  });
+
 
 const db = admin.database();
 
@@ -1118,6 +1128,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

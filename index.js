@@ -218,11 +218,7 @@ app.post(
   "/shopify/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    if (!verifyShopifyWebhook(req, res, req.body)) {
-      console.error("❌ Invalid Shopify webhook signature");
-      return res.sendStatus(401);
-    }
-
+    
     try {
       const event = JSON.parse(req.body.toString("utf8"));
       console.log("📦 Shopify webhook received:", event);
@@ -419,7 +415,7 @@ app.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     try {
-      if (!verifyShopifyWebhook(req)) return res.sendStatus(401);
+    
 
       const order = parseRawBody(req);
       console.log("🚫 Shopify Order Cancelled:", order.id);
@@ -1127,6 +1123,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

@@ -1,7 +1,28 @@
 import express from "express";
-import { db } from "./firebase.js";
-import fs from "fs";
 import crypto from "crypto";
+import admin from "firebase-admin";
+import fs from "fs";
+
+// Use secret path in Render
+const serviceAccountPath =
+  process.env.NODE_ENV === "production"
+    ? "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json"
+    : "./automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json";
+
+console.log("🔥 Using service account path:", serviceAccountPath);
+
+const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+console.log("✅ Loaded service account project_id:", serviceAccount.project_id);
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
+  });
+}
+
+const db = admin.database();
+
 
 
 // ---- Firebase Setup ----
@@ -1087,6 +1108,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

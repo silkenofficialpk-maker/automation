@@ -40,7 +40,7 @@ console.log("📧 Client Email:", serviceAccount.client_email);
 
 admin.initializeApp({
   credential: admin.credential.cert({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseURL: process.env.DATABASE_URL,
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
@@ -1158,6 +1158,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

@@ -5,13 +5,6 @@ import crypto from "crypto";
 
 
 // ---- Firebase Setup ----
-// ---- Firebase Setup ----
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
-  });
-}
 
 
 const app = express();
@@ -1094,6 +1087,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

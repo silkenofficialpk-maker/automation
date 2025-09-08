@@ -45,6 +45,15 @@ const app = express();
 app.use(express.json());
 
 
+let db;
+try {
+  db = admin.database();
+} catch (err) {
+  console.error("⚠️ Firebase not initialized:", err.message);
+  db = null;
+}
+
+
 // ---- ENV Vars ----
 const {
   WHATSAPP_NUMBER_ID,
@@ -841,6 +850,7 @@ app.post("/webhook/shopify", express.json({ type: "application/json" }), async (
 
     if (event === "orders/create") {
       await db.ref(`orders/${order.id}`).set(order);
+      
       console.log("✅ Order saved in Firebase:", order.id);
     }
 
@@ -854,6 +864,7 @@ app.post("/webhook/shopify", express.json({ type: "application/json" }), async (
     console.error("❌ Shopify webhook error:", err);
     res.sendStatus(500);
   }
+  res.sendStatus(200);
 });
 // ---------------- COD Delivery & Return Handling ----------------
 async function handleDeliveryEvent(order, status) {
@@ -1119,6 +1130,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

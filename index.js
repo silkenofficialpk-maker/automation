@@ -836,6 +836,7 @@ app.get("/webhook", (req, res) => {
 });
 
 // ---------------- Shopify Webhook Endpoint ----------------
+// ---------------- Shopify Webhook Endpoint ----------------
 app.post(
   "/webhook/shopify",
   express.json({ type: "application/json" }),
@@ -846,34 +847,32 @@ app.post(
 
       console.log("📦 Shopify Webhook:", event, "Order ID:", order.id);
 
-      let messageBody = "";
-
       if (event === "orders/create") {
-        messageBody = `🆕 New order received!\nOrder ID: ${order.id}\nCustomer: ${order.customer?.first_name} ${order.customer?.last_name}\nTotal: ${order.total_price} ${order.currency}`;
+        const phone = order.customer?.phone || order.shipping_address?.phone;
+        if (phone) {
+          await sendWhatsAppTemplate(phone, TPL.ORDER_DISPATCH_REMINDER);
+          console.log("✅ WhatsApp sent for new order:", order.id, phone);
+        }
       }
 
       if (event === "orders/updated") {
-        messageBody = `🔄 Order updated!\nOrder ID: ${order.id}\nCurrent Status: ${order.financial_status}`;
+        const phone = order.customer?.phone || order.shipping_address?.phone;
+        if (phone) {
+          await sendWhatsAppTemplate(phone, TPL.ORDER_UPDATE);
+          console.log("✅ WhatsApp sent for updated order:", order.id, phone);
+        }
       }
 
-      if (messageBody) {
-        await client.messages.create({
-          from: WHATSAPP_FROM,
-          to: `whatsapp:${WHATSAPP_TO}`,
-          body: messageBody,
-        });
-        console.log("✅ WhatsApp message sent:", messageBody);
-      }
-
-      // ✅ Always reply OK so Shopify does not retry
+      // ✅ Always respond 200 so Shopify doesn’t retry
       res.sendStatus(200);
     } catch (err) {
       console.error("❌ Shopify webhook error:", err);
-      // Still reply OK to stop Shopify retry
+      // Still reply OK to prevent retries
       res.sendStatus(200);
     }
   }
 );
+
 
 // ---------------- COD Delivery & Return Handling ----------------
 async function handleDeliveryEvent(order, status) {
@@ -1139,6 +1138,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

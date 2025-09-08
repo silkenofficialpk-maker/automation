@@ -3,6 +3,8 @@ import admin from "firebase-admin";
 import fs from "fs";
 import crypto from "crypto";
 
+const PORT = process.env.PORT || 3000;
+
 // ---- Firebase Setup ----
 const serviceAccount = JSON.parse(
   fs.readFileSync("./automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json", "utf8")
@@ -1086,7 +1088,6 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: "DB write failed" });
   }
 });
-const PORT = process.env.PORT || 3000;
 
 // Root
 app.get("/", (req, res) => {

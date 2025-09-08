@@ -1,22 +1,28 @@
+import { initializeApp, cert } from "firebase-admin/app";
+import { getDatabase } from "firebase-admin/database";
+import { fileURLToPath } from "url";
+import path from "path";
+import fs from "fs";
 
-// firebase.js
-import admin from "firebase-admin";
-import { readFileSync } from "fs";
+// ES Module helpers
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Load service account file (local or Render secret file)
-const serviceAccount = JSON.parse(
-  readFileSync("./automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json", "utf8")
-);
+// Use secret file path depending on environment
+const credentialsPath =
+  process.env.NODE_ENV === "production"
+    ? "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json"
+    : path.join(__dirname, "./automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json");
 
-// Initialize only once
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
-  });
-}
+// Parse the JSON
+const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
 
-const db = admin.database();
+// Initialize Firebase
+initializeApp({
+  credential: cert(serviceAccount),
+  databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
+});
 
-// ✅ Make sure both are exported
-export { admin, db };
+// Export DB
+const db = getDatabase();
+export { db };

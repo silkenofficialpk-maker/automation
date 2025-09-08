@@ -850,7 +850,7 @@ app.post(
       if (event === "orders/create") {
         const phone = order.customer?.phone || order.shipping_address?.phone;
         if (phone) {
-          await sendWhatsAppTemplate(phone, TPL.ORDER_DISPATCH_REMINDER);
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION);
           console.log("✅ WhatsApp sent for new order:", order.id, phone);
         }
       }
@@ -1138,6 +1138,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

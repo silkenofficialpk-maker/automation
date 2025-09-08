@@ -1058,20 +1058,28 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-// Firebase test
+// Firebase test route
 app.get("/test-db", async (req, res) => {
   try {
-    const data = {
+    const testData = {
       timestamp: Date.now(),
       message: "Hello from Render 🚀",
     };
-    await dbSet("/test", data);
-    res.json({ success: true, data });
+
+    await db.ref("test").set(testData);
+
+    const snapshot = await db.ref("test").once("value");
+    const savedData = snapshot.val();
+
+    console.log("✅ Firebase saved data:", savedData);
+
+    res.json({ success: true, savedData, serviceAccount });
   } catch (err) {
-    console.error("❌ Firebase write failed:", err);
-    res.status(500).json({ error: "DB write failed" });
+    console.error("❌ Firebase test failed:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 // Root
 app.get("/", (req, res) => {
@@ -1108,6 +1116,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

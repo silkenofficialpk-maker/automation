@@ -5,10 +5,7 @@ import crypto from "crypto";
 
 
 // ---- Firebase Setup ----
-const serviceAccount = JSON.parse(
-  fs.readFileSync("/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json", "utf8")
-);
-
+const admin = require(../firebase);
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -1097,5 +1094,6 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 

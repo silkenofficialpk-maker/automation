@@ -4,7 +4,6 @@ import admin from "firebase-admin";
 import fs from "fs";
 
 // Use secret path in Render
-import admin from "firebase-admin";
 import { fileURLToPath } from "url";
 import path from "path";
 
@@ -21,7 +20,7 @@ try {
     serviceAccount = await import(servicePath, { assert: { type: "json" } });
   } else {
     // 🔥 Use local file for testing
-    const localPath = path.join(__dirname, "../firebase-service-account.json");
+    const localPath = path.join(__dirname, "../automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json");
     console.log("🔥 Using local service account file:", localPath);
     serviceAccount = await import(localPath, { assert: { type: "json" } });
   }
@@ -1146,6 +1145,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

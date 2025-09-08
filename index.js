@@ -3,7 +3,6 @@ import admin from "firebase-admin";
 import fs from "fs";
 import crypto from "crypto";
 
-const PORT = process.env.PORT || 3000;
 
 // ---- Firebase Setup ----
 const serviceAccount = JSON.parse(
@@ -1098,3 +1097,4 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+

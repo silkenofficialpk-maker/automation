@@ -119,27 +119,36 @@ function normalizePhone(raw, defaultCC = DEFAULT_COUNTRY_CODE) {
 }
 
 // ---- WhatsApp Template Sender ----
-async function sendWhatsAppTemplate(to, templateName, components = [], lang = "en") {
+async function sendWhatsAppTemplate(phone, templateName, params) {
   try {
-    const url = `https://graph.facebook.com/v19.0/${WHATSAPP_NUMBER_ID}/messages`;
-    const body = {
-      messaging_product: "whatsapp",
-      to,
-      type: "template",
-      template: { name: templateName, language: { code: lang }, components },
-    };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json();
-    if (!res.ok) console.error("❌ WhatsApp API error:", res.status, json);
-    else console.log("✅ sent template", templateName, "to", to);
-    return json;
+    const resp = await axios.post(
+      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "template",
+        template: {
+          name: templateName, // e.g., "order_confirmation"
+          language: { code: "en" },
+          components: [
+            {
+              type: "body",
+              parameters: params.map((p) => ({ type: "text", text: String(p) })),
+            },
+          ],
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("✅ WhatsApp sent:", resp.data);
   } catch (err) {
-    console.error("❌ sendWhatsAppTemplate error:", err);
-    throw err;
+    console.error("❌ WhatsApp API error:", err.response?.data || err.message);
   }
 }
 
@@ -1153,6 +1162,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

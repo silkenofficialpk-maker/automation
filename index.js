@@ -123,7 +123,7 @@ function normalizePhone(raw, defaultCC = DEFAULT_COUNTRY_CODE) {
 async function sendWhatsAppTemplate(phone, templateName, params) {
   try {
     const resp = await axios.post(
-      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to: phone,
@@ -1163,6 +1163,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

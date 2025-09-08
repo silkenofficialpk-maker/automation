@@ -23,6 +23,8 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
+console.log("✅ Loaded service account admin:", admin);
+
 
 
 // ---- Firebase Setup ----
@@ -1116,6 +1118,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

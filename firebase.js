@@ -23,7 +23,7 @@ initializeApp({
   databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
 });
 
-console.log(JSON.stringify(serviceAccount, null, 2))
+console.log(JSON.stringify(serviceAccount, null, 2));
 // Export DB
 const db = getDatabase();
 export { db };

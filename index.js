@@ -837,6 +837,7 @@ app.get("/webhook", (req, res) => {
 
 // ---------------- Shopify Webhook Endpoint ----------------
 // ---------------- Shopify Webhook Endpoint ----------------
+// ---------------- Shopify Webhook Endpoint ----------------
 app.post(
   "/webhook/shopify",
   express.json({ type: "application/json" }),
@@ -848,27 +849,41 @@ app.post(
       console.log("📦 Shopify Webhook:", event, "Order ID:", order.id);
 
       if (event === "orders/create") {
-        const phone = order.customer?.phone || order.shipping_address?.phone;
+        // Extract needed details for WhatsApp template
+        const customerName = order.customer?.first_name || "Customer";
+        const orderId = order.id;
+        const firstLineItem = order.line_items?.[0] || {};
+        const productName = firstLineItem.title || "Product";
+        const variant = firstLineItem.variant_title || "-";
+        const shopName = "MyShop"; // 🔧 Change this to your shop name
+        const total = order.total_price;
+        const currency = order.currency;
+
+        // Customer phone (from Shopify order)
+        const phone =
+          order.phone ||
+          order.customer?.phone ||
+          order.shipping_address?.phone;
+
         if (phone) {
-          await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION);
-          console.log("✅ WhatsApp sent for new order:", order.id, phone);
+          await sendWhatsAppTemplate(phone, "order_confirmation", [
+            customerName, // {{1}}
+            orderId,      // {{2}}
+            productName,  // {{3}}
+            variant,      // {{4}}
+            shopName,     // {{5}}
+            total,        // {{6}}
+            currency,     // {{7}}
+          ]);
+        } else {
+          console.warn("⚠️ No phone number found for order:", orderId);
         }
       }
 
-      if (event === "orders/updated") {
-        const phone = order.customer?.phone || order.shipping_address?.phone;
-        if (phone) {
-          await sendWhatsAppTemplate(phone, TPL.ORDER_UPDATE);
-          console.log("✅ WhatsApp sent for updated order:", order.id, phone);
-        }
-      }
-
-      // ✅ Always respond 200 so Shopify doesn’t retry
       res.sendStatus(200);
     } catch (err) {
       console.error("❌ Shopify webhook error:", err);
-      // Still reply OK to prevent retries
-      res.sendStatus(200);
+      res.sendStatus(500);
     }
   }
 );
@@ -1138,6 +1153,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

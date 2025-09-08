@@ -31,6 +31,11 @@ try {
   process.exit(1);
 }
 
+console.log("🔑 Key ID:", serviceAccount.private_key_id);
+console.log("📧 Client Email:", serviceAccount.client_email);
+
+
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
@@ -1147,6 +1152,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

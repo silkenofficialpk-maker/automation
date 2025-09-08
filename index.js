@@ -16,7 +16,7 @@ admin.initializeApp({
   databaseURL: process.env.DATABASE_URL || "https://automation-4b66d-default-rtdb.firebaseio.com",
 });
 
-console.log("✅ Firebase initialized for project:", serviceAccount.project_id);
+console.log("✅ Firebase initialized for project:", admin.database);
 
 // ---- Firebase Test ----
 admin
@@ -1122,6 +1122,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

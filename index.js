@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 
 // ---- Firebase Setup ----
-const admin = require(./firebase);
+const admin = require("./firebase.js");
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -1093,6 +1093,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

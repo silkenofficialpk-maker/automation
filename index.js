@@ -833,10 +833,6 @@ app.get("/webhook", (req, res) => {
 // ---------------- Shopify Webhook Endpoint ----------------
 app.post("/webhook/shopify", express.json({ type: "application/json" }), async (req, res) => {
   try {
-    if (!verifyShopifyWebhook(req)) {
-      console.error("❌ Invalid Shopify webhook signature");
-      return res.sendStatus(401);
-    }
 
     const event = req.headers["x-shopify-topic"];
     const order = req.body;
@@ -1123,6 +1119,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

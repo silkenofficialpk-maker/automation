@@ -33,7 +33,7 @@ try {
   process.exit(1);
 }
 
-console.log("🔑 Key ID:", serviceAccount.private_key_id);
+console.log("🔑 Key ID:", serviceAccount.private_key);
 console.log("📧 Client Email:", serviceAccount.client_email);
 
 
@@ -1154,6 +1154,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

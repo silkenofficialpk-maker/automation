@@ -865,7 +865,7 @@ app.post(
         const firstLineItem = order.line_items?.[0] || {};
         const productName = firstLineItem.title || "Product";
         const variant = firstLineItem.variant_title || "-";
-        const shopName = "MyShop"; // 🔧 Change this to your shop name
+        const shopName = "SILKEN ROOT"; // 🔧 Change this to your shop name
         const total = order.total_price;
         const currency = order.currency;
 
@@ -1163,6 +1163,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

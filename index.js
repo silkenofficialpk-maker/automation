@@ -1,5 +1,5 @@
 import express from "express";
-import { admin } from "./firebase.js";
+import { admin, db } from "./firebase.js";
 import fs from "fs";
 import crypto from "crypto";
 
@@ -1094,6 +1094,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

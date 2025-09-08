@@ -1,5 +1,5 @@
 import express from "express";
-import { admin } from "./firebase.js";
+import { admin, db } from "./firebase.js";
 import fs from "fs";
 import crypto from "crypto";
 
@@ -13,7 +13,7 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.database();
+
 const app = express();
 app.use(express.json());
 
@@ -1094,6 +1094,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

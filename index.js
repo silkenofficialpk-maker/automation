@@ -372,37 +372,42 @@ function parseRawBody(req) {
 }
 
 // Shopify → Order Created webhook
+// ---- Shopify → Order Created webhook ----
 app.post(
   "/webhook/shopify/order",
   express.raw({ type: "application/json" }),
   async (req, res) => {
     try {
-     
+      if (!verifyShopifyWebhook(req, req.body)) {
+        console.error("❌ Invalid HMAC");
+        return res.sendStatus(401);
+      }
 
-      const order = parseRawBody(req);
+      const order = JSON.parse(req.body.toString("utf8"));
       console.log("🛒 Shopify Order Created:", order.id);
 
-      // Save to Firebase
-      await saveCODOrder({
-        id: order.id,
-        customerName: order.customer?.first_name || "Customer",
-        phone: order.shipping_address?.phone || order.customer?.phone,
-        total: order.total_price,
-        currency: order.currency,
-        product: order.line_items?.[0]?.title || "Product",
-        qty: order.line_items?.[0]?.quantity || 1,
-      });
+      // Extract details
+      const customerName = order.customer?.first_name || "Customer";
+      const phone = normalizePhone(order.shipping_address?.phone || order.customer?.phone);
+      const total = order.total_price;
+      const orderId = order.id;
+
+      if (!phone) {
+        console.error("❌ No phone number found for order:", orderId);
+        return res.sendStatus(200);
+      }
 
       // Send WhatsApp Confirmation
-      await sendOrderConfirmation({
-        id: order.id,
-        customerName: order.customer?.first_name || "Customer",
-        phone: order.shipping_address?.phone || order.customer?.phone,
-        total: order.total_price,
-        currency: order.currency,
-        product: order.line_items?.[0]?.title || "Product",
-        qty: order.line_items?.[0]?.quantity || 1,
-      });
+      await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: customerName },
+            { type: "text", text: String(orderId) },
+            { type: "text", text: `${total} ${order.currency}` },
+          ],
+        },
+      ]);
 
       res.sendStatus(200);
     } catch (err) {
@@ -411,6 +416,7 @@ app.post(
     }
   }
 );
+
 
 // Shopify → Order Cancelled webhook
 app.post(
@@ -1124,6 +1130,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

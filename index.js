@@ -378,10 +378,7 @@ app.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     try {
-      if (!verifyShopifyWebhook(req)) {
-        console.warn("❌ Invalid Shopify webhook signature");
-        return res.sendStatus(401);
-      }
+     
 
       const order = parseRawBody(req);
       console.log("🛒 Shopify Order Created:", order.id);
@@ -1130,6 +1127,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

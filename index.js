@@ -46,10 +46,55 @@ admin.initializeApp({
     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
   }),
 });
+import express from "express";
+import crypto from "crypto";
+import admin from "firebase-admin";
+import { fileURLToPath } from "url";
+import path from "path";
+import fs from "fs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let serviceAccount;
+
+try {
+  if (process.env.NODE_ENV === "production") {
+    // 🔥 Use Render Secret File
+    const servicePath = "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json";
+    console.log("🔥 Using Render service account file:", servicePath);
+
+    const fileData = fs.readFileSync(servicePath, "utf8");
+    serviceAccount = JSON.parse(fileData);
+  } else {
+    // 🔥 Use local file for testing
+    const localPath = path.join(__dirname, "../firebase-service-account.json");
+    console.log("🔥 Using local service account file:", localPath);
+
+    const fileData = fs.readFileSync(localPath, "utf8");
+    serviceAccount = JSON.parse(fileData);
+  }
+} catch (err) {
+  console.error("❌ Failed to load service account file:", err);
+  process.exit(1);
+}
+
+console.log("🔑 Key ID:", serviceAccount.private_key_id);
+console.log("📧 Client Email:", serviceAccount.client_email);
+
+admin.initializeApp({
+  credential: admin.credential.cert({   
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  }),
+  // 👇 databaseURL must be here (NOT inside credential)
+  databaseURL: process.env.DATABASE_URL || "https://automation-4b66d-default-rtdb.firebaseio.com",
+});
 
 console.log("✅ Firebase initialized for project:", serviceAccount.project_id);
 
-// Test token generation
+// ---- Firebase Test ----
 admin
   .auth()
   .listUsers(1) // just get one user
@@ -60,18 +105,13 @@ admin
     console.error("❌ Service account failed:", err);
   });
 
-
 const db = admin.database();
+console.log("✅ Realtime DB connected:", db.ref("/").toString());
 
-console.log("✅ Loaded service account admin:", admin);
-
-
-
-// ---- Firebase Setup ----
-
-
+// ---- Express Setup ----
 const app = express();
 app.use(express.json());
+
 
 // ---- ENV Vars ----
 const {
@@ -1158,6 +1198,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

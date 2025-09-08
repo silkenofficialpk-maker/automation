@@ -45,13 +45,7 @@ const app = express();
 app.use(express.json());
 
 
-let db;
-try {
-  db = admin.database();
-} catch (err) {
-  console.error("⚠️ Firebase not initialized:", err.message);
-  db = null;
-}
+
 
 
 // ---- ENV Vars ----
@@ -1130,6 +1124,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

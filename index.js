@@ -4,20 +4,38 @@ import admin from "firebase-admin";
 import fs from "fs";
 
 // Use secret path in Render
-const serviceAccountPath =
-  process.env.NODE_ENV === "production"
-    ? "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json"
-    : "./automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json";
+import admin from "firebase-admin";
+import { fileURLToPath } from "url";
+import path from "path";
 
-console.log("🔥 Using service account path:", serviceAccountPath);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
-console.log("✅ Loaded service account project_id:", serviceAccount.project_id);
+let serviceAccount;
+
+try {
+  if (process.env.NODE_ENV === "production") {
+    // 🔥 Use Render Secret File
+    const servicePath = "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json";
+    console.log("🔥 Using Render service account file:", servicePath);
+    serviceAccount = await import(servicePath, { assert: { type: "json" } });
+  } else {
+    // 🔥 Use local file for testing
+    const localPath = path.join(__dirname, "../firebase-service-account.json");
+    console.log("🔥 Using local service account file:", localPath);
+    serviceAccount = await import(localPath, { assert: { type: "json" } });
+  }
+} catch (err) {
+  console.error("❌ Failed to load service account file:", err);
+  process.exit(1);
+}
 
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com",
-  });
+  credential: admin.credential.cert(serviceAccount.default),
+  databaseURL: `https://${serviceAccount.default.project_id}.firebaseio.com`,
+});
+
+console.log("✅ Firebase initialized for project:", serviceAccount.default.project_id);
 
 // Test token generation
 admin
@@ -1128,6 +1146,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

@@ -1,11 +1,9 @@
 import express from "express";
 import crypto from "crypto";
 import admin from "firebase-admin";
-import fs from "fs";
-
-// Use secret path in Render
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,12 +15,16 @@ try {
     // 🔥 Use Render Secret File
     const servicePath = "/etc/secrets/automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json";
     console.log("🔥 Using Render service account file:", servicePath);
-    serviceAccount = await import(servicePath, { assert: { type: "json" } });
+
+    const fileData = fs.readFileSync(servicePath, "utf8");
+    serviceAccount = JSON.parse(fileData);
   } else {
     // 🔥 Use local file for testing
-    const localPath = path.join(__dirname, "../automation-4b66d-firebase-adminsdk-fbsvc-e03497e203.json");
+    const localPath = path.join(__dirname, "../firebase-service-account.json");
     console.log("🔥 Using local service account file:", localPath);
-    serviceAccount = await import(localPath, { assert: { type: "json" } });
+
+    const fileData = fs.readFileSync(localPath, "utf8");
+    serviceAccount = JSON.parse(fileData);
   }
 } catch (err) {
   console.error("❌ Failed to load service account file:", err);
@@ -30,11 +32,11 @@ try {
 }
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount.default),
-  databaseURL: `https://${serviceAccount.default.project_id}.firebaseio.com`,
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
 });
 
-console.log("✅ Firebase initialized for project:", serviceAccount.default.project_id);
+console.log("✅ Firebase initialized for project:", serviceAccount.project_id);
 
 // Test token generation
 admin
@@ -1145,6 +1147,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

@@ -18,10 +18,17 @@ try {
   process.exit(1);
 }
 
+
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://automation-4b66d-default-rtdb.firebaseio.com"
+  credential: admin.credential.cert({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  }),
+  databaseURL: process.env.DATABASE_URL,
 });
+
+console.log("✅ Firebase initialized for project:", process.env.FIREBASE_PROJECT_ID);
 
 // ---- Firebase Test ----
 admin
@@ -1159,6 +1166,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

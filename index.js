@@ -395,32 +395,32 @@ app.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     try {
+     
 
-      const order = JSON.parse(req.body.toString("utf8"));
+      const order = parseRawBody(req);
       console.log("🛒 Shopify Order Created:", order.id);
 
-      // Extract details
-      const customerName = order.customer?.first_name || "Customer";
-      const phone = normalizePhone(order.shipping_address?.phone || order.customer?.phone);
-      const total = order.total_price;
-      const orderId = order.id;
-
-      if (!phone) {
-        console.error("❌ No phone number found for order:", orderId);
-        return res.sendStatus(200);
-      }
+      // Save to Firebase
+      await saveCODOrder({
+        id: order.id,
+        customerName: order.customer?.first_name || "Customer",
+        phone: order.shipping_address?.phone || order.customer?.phone,
+        total: order.total_price,
+        currency: order.currency,
+        product: order.line_items?.[0]?.title || "Product",
+        qty: order.line_items?.[0]?.quantity || 1,
+      });
 
       // Send WhatsApp Confirmation
-      await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, [
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: customerName },
-            { type: "text", text: String(orderId) },
-            { type: "text", text: `${total} ${order.currency}` },
-          ],
-        },
-      ]);
+      await sendOrderConfirmation({
+        id: order.id,
+        customerName: order.customer?.first_name || "Customer",
+        phone: order.shipping_address?.phone || order.customer?.phone,
+        total: order.total_price,
+        currency: order.currency,
+        product: order.line_items?.[0]?.title || "Product",
+        qty: order.line_items?.[0]?.quantity || 1,
+      });
 
       res.sendStatus(200);
     } catch (err) {
@@ -1170,6 +1170,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

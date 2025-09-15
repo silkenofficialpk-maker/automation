@@ -30,15 +30,19 @@ admin.initializeApp({
 
 console.log("✅ Firebase initialized for project:", process.env.FIREBASE_PROJECT_ID);
 
-// ---- Firebase Test ----
+// ✅ Test service account by listing just 1 user
 admin
   .auth()
-  .listUsers(1) // just get one user
-  .then(() => {
-    console.log("✅ Service account is valid and can access Firebase");
+  .listUsers(1)
+  .then((listUsersResult) => {
+    if (listUsersResult.users.length > 0) {
+      console.log("✅ Service account is valid. Example user:", listUsersResult.users[0].uid);
+    } else {
+      console.log("✅ Service account is valid, but no users found.");
+    }
   })
   .catch((err) => {
-    console.error("❌ Service account failed:", err);
+    console.error("❌ Service account failed:", err.message);
   });
 
 const db = admin.database();
@@ -1166,6 +1170,7 @@ app.listen(PORT, () => {
   console.log(`⚡ Server running on port ${PORT}`);
   console.log("==> Your service is live 🎉");
 });
+
 
 
 

@@ -65,7 +65,6 @@ const {
   VERIFY_TOKEN_META = "shopify123",
   SHOPIFY_WEBHOOK_SECRET,
   DEFAULT_COUNTRY_CODE = "92",
-  PORT = 3000,
 } = process.env;
 
 if (!WHATSAPP_NUMBER_ID || !WHATSAPP_TOKEN || !SHOPIFY_SHOP || !SHOPIFY_ACCESS_TOKEN) {
@@ -1168,6 +1167,7 @@ app.get("/", (req, res) => {
 // ---------------- Start Server ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

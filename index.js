@@ -1134,31 +1134,7 @@ app.get("/test-db", async (req, res) => {
 });
 
 
-// Root
-app.get("/", (req, res) => {
-  res.send("✅ Shopify x WhatsApp Automation Service Running");
-});
-// ---------------- Utility Routes ----------------
 
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: Date.now() });
-});
-
-// Firebase test
-app.get("/test-db", async (req, res) => {
-  try {
-    const data = {
-      timestamp: Date.now(),
-      message: "Hello from Render 🚀",
-    };
-    await dbSet("/test", data);
-    res.json({ success: true, data });
-  } catch (err) {
-    console.error("❌ Firebase write failed:", err);
-    res.status(500).json({ error: "DB write failed" });
-  }
-});
 
 // Root
 app.get("/", (req, res) => {
@@ -1167,6 +1143,7 @@ app.get("/", (req, res) => {
 // ---------------- Start Server ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`⚡ Server running on port ${PORT}`));
+
 
 
 

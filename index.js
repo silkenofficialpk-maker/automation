@@ -8,17 +8,6 @@ import fs from "fs";
 
 
 
-let serviceAccount;
-
-try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  console.log("✅ Loaded Firebase service account:", serviceAccount.client_email);
-} catch (err) {
-  console.error("❌ Failed to load Firebase credentials from env:", err);
-  process.exit(1);
-}
-
-
 admin.initializeApp({
   credential: admin.credential.cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
@@ -1145,6 +1134,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

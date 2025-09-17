@@ -52,7 +52,6 @@ const {
   SHOPIFY_SHOP,
   SHOPIFY_ACCESS_TOKEN,
   VERIFY_TOKEN_META = "shopify123",
-  SHOPIFY_WEBHOOK_SECRET,
   DEFAULT_COUNTRY_CODE = "92",
 } = process.env;
 
@@ -1123,17 +1122,6 @@ app.get("/test-db", async (req, res) => {
 });
 
 
-
-
-// Root
-app.get("/", (req, res) => {
-  res.send("✅ Shopify x WhatsApp Automation Service Running");
-});
-// ---------------- Start Server ----------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`⚡ Server running on port ${PORT}`);
-});
 
 
 

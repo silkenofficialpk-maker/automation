@@ -1,12 +1,15 @@
+process.on("uncaughtException", (err) => {
+  console.error("🔥 Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection:", reason);
+});
+
 import express from "express";
 import crypto from "crypto";
 import axios from "axios";
 import admin from "firebase-admin";
-import { fileURLToPath } from "url";
-import path from "path";
-import fs from "fs";
-
-
 
 admin.initializeApp({
   credential: admin.credential.cert({
@@ -1134,6 +1137,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 

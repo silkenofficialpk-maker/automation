@@ -15,8 +15,7 @@ admin.initializeApp({
   credential: admin.credential.cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  }),
+    privateKey: process.env.FIREBASE_PRIVATE_KEY, }),
   databaseURL: process.env.DATABASE_URL,
 });
 
@@ -1137,6 +1136,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 

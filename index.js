@@ -974,10 +974,7 @@ async function handleDeliveryEvent(order, status) {
 // ---------------- Shopify Fulfillment Webhook ----------------
 app.post("/webhook/fulfillment", express.json({ type: "application/json" }), async (req, res) => {
   try {
-    if (!verifyShopifyWebhook(req)) {
-      return res.sendStatus(401);
-    }
-
+    
     const fulfillment = req.body;
     const orderId = fulfillment.order_id;
 
@@ -1179,6 +1176,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

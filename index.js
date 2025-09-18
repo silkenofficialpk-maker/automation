@@ -114,9 +114,49 @@ function normalizePhone(raw, defaultCC = DEFAULT_COUNTRY_CODE) {
   return digits;
 }
 
-// ---- WhatsApp Template Sender ----
-async function sendWhatsAppTemplate(phone, templateName, params) {
+// ---- Extended WhatsApp Template Sender ----
+async function sendWhatsAppTemplate(phone, templateName, params = {}) {
   try {
+    const components = [];
+
+    // Body params (dynamic count)
+    if (params.body && params.body.length > 0) {
+      components.push({
+        type: "body",
+        parameters: params.body.map((p) => ({
+          type: "text",
+          text: String(p),
+        })),
+      });
+    }
+
+    // Header params (e.g., invoice number, image, etc.)
+    if (params.header && params.header.length > 0) {
+      components.push({
+        type: "header",
+        parameters: params.header.map((p) => ({
+          type: "text",
+          text: String(p),
+        })),
+      });
+    }
+
+    // Button params (e.g., quick replies or URL buttons)
+    if (params.button && params.button.length > 0) {
+      params.button.forEach((btn, index) => {
+        components.push({
+          type: "button",
+          sub_type: btn.sub_type || "quick_reply", // "quick_reply" or "url"
+          index: String(index),
+          parameters: [
+            btn.sub_type === "url"
+              ? { type: "text", text: String(btn.value) } // url button requires "text"
+              : { type: "payload", payload: String(btn.value) }, // quick_reply requires "payload"
+          ],
+        });
+      });
+    }
+
     const resp = await axios.post(
       `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_NUMBER_ID}/messages`,
       {
@@ -124,14 +164,9 @@ async function sendWhatsAppTemplate(phone, templateName, params) {
         to: phone,
         type: "template",
         template: {
-          name: templateName, // e.g., "order_confirmation"
+          name: templateName,
           language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: params.map((p) => ({ type: "text", text: String(p) })),
-            },
-          ],
+          components,
         },
       },
       {
@@ -142,11 +177,17 @@ async function sendWhatsAppTemplate(phone, templateName, params) {
       }
     );
 
-    console.log("✅ WhatsApp sent:", resp.data);
+    console.log("✅ Sent template:", templateName, "to", phone);
+    return resp.data;
   } catch (err) {
-    console.error("❌ WhatsApp API error:", err.response?.data || err.message);
+    console.error(
+      "❌ WhatsApp Template Send Error:",
+      err.response?.data || err.message
+    );
+    throw err;
   }
 }
+
 
 // ---- Shopify Order Note Updater ----
 async function updateShopifyOrderNote(orderId, noteText) {
@@ -1134,6 +1175,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

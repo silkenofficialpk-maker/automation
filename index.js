@@ -429,7 +429,7 @@ app.post(
   async (req, res) => {
     try {
      
-
+res.sendStatus(200);
       const order = parseRawBody(req);
       console.log("🛒 Shopify Order Created:", order.id);
 
@@ -455,7 +455,7 @@ app.post(
         qty: order.line_items?.[0]?.quantity || 1,
       });
 
-      res.sendStatus(200);
+      
     } catch (err) {
       console.error("❌ Shopify order webhook error:", err);
       res.sendStatus(500);
@@ -1176,6 +1176,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

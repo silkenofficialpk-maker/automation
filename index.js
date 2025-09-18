@@ -21,25 +21,25 @@ admin.initializeApp({
 
 console.log("✅ Firebase initialized for project:", process.env.FIREBASE_PROJECT_ID);
 
-// ✅ Test service account by listing just 1 user
-admin
-  .auth()
-  .listUsers(1)
-  .then((listUsersResult) => {
-    if (listUsersResult.users.length > 0) {
-      console.log("✅ Service account is valid. Example user:", listUsersResult.users[0].uid);
-    } else {
-      console.log("✅ Service account is valid, but no users found.");
-    }
+// ✅ Test Firebase Realtime Database
+const db = admin.database();
+db.ref("railway_test")
+  .set({ status: "ok", time: Date.now() })
+  .then(() => {
+    console.log("✅ Database write test successful");
+    return db.ref("railway_test").once("value");
+  })
+  .then((snapshot) => {
+    console.log("✅ Database read test:", snapshot.val());
   })
   .catch((err) => {
-    console.error("❌ Service account failed:", err.message);
+    console.error("❌ Database test failed:", err.message);
   });
 
 
 
 // ---- Express Setup ----
-const db = admin.database();
+
 const app = express();
 app.use(express.json());
 
@@ -1136,6 +1136,7 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 

@@ -1158,7 +1158,7 @@ app.get("/test-db", async (req, res) => {
 
     console.log("✅ Firebase saved data:", savedData);
 
-    res.json({ success: true, savedData });
+    res.json({ success: true, savedData, });
   } catch (err) {
     console.error("❌ Firebase test failed:", err);
     res.status(500).json({ error: err.message });
@@ -1177,6 +1177,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

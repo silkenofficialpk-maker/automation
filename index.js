@@ -306,22 +306,26 @@ async function updateOrderStatus(orderId, status) {
 }
 
 // Send confirmation message to customer (COD flow)
+// Send confirmation message to customer (COD flow)
 async function sendOrderConfirmation(order) {
   const phone = normalizePhone(order.phone);
   if (!phone) return;
 
-  await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, [
-    {
-      type: "body",
-      parameters: [
-        { type: "text", text: order.customerName || "Customer" },
-        { type: "text", text: order.id.toString() },
-        { type: "text", text: order.total_price || "PKR 0" },
-      ],
-    },
-  ]);
+  await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, {
+    body: [
+      order.customerName || "Customer",   // {{1}} Hello NAME 👋
+      order.id?.toString() || "-",        // {{2}} Order #
+      order.productName || "Product",     // {{3}} Product name
+      order.variant || "-",               // {{4}} Variant (e.g., Size/Color)
+      order.storeName || "Our Store",     // {{5}} Store name
+      order.total_price || "0",           // {{6}} Amount
+      order.currency || "PKR",            // {{7}} Currency
+    ],
+  });
+
   console.log("📩 Sent COD confirmation to:", phone);
 }
+
 
 // Handle delivery attempt
 async function deliveryAttempt(orderId, success = true) {
@@ -1175,6 +1179,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

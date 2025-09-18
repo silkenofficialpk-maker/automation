@@ -242,7 +242,7 @@ app.post("/webhook", express.json(), async (req, res) => {
       }
       return res.sendStatus(200);
     }
-    res.sendStatus(404);
+   
   } catch (err) {
     console.error("❌ WA webhook handler error:", err);
     res.sendStatus(500);
@@ -1177,6 +1177,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

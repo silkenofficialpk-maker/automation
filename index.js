@@ -974,6 +974,16 @@ async function handleDeliveryEvent(order, status) {
 }
 // ---------------- Shopify Fulfillment Webhook ----------------
 // Helper: fetch order name
+
+function normalizeOrderId(orderId) {
+  if (typeof orderId === "string" && orderId.includes("gid://")) {
+    return orderId.split("/").pop();
+  }
+  return orderId;
+}
+
+
+
 async function getOrderName(orderId) {
   const url = `https://${process.env.SHOPIFY_SHOP}/admin/api/2025-01/orders/${orderId}.json`;
   const res = await fetch(url, {
@@ -999,9 +1009,10 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     const fulfillment = req.body;
     res.sendStatus(200); // ✅ Always ACK quickly
 
-    const { id: fulfillmentId, order_id: orderId, status, shipment_status, tracking_url } = fulfillment;
+    const { id: fulfillmentId, order_id: rawOrderId, status, shipment_status, tracking_url } = fulfillment;
 
     // 1️⃣ Fetch order name
+    const orderId = normalizeOrderId(rawOrderId);
     const orderName = await getOrderName(orderId);
 
     // 2️⃣ Save/update fulfillment info in Firebase
@@ -1227,6 +1238,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -1024,6 +1024,11 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
 
     // 1️⃣ Fetch order name
     const orderName = await getOrderDetails(orderId);
+    const phone =
+      order.phone ||
+      order.customer?.phone ||
+      order.shipping_address?.phone ||
+      null;
 
     // 2️⃣ Save/update fulfillment info in Firebase (safe values only)
     await db.ref(`orders/${orderId}/fulfillments/${fulfillmentId}`).set({
@@ -1038,7 +1043,6 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     console.log(`🔥 Saved fulfillment update for order ${orderName} (${orderId})`);
 
     // 3️⃣ Fetch customer phone (safe)
-    const phone = await getCustomerPhone(orderId);
     if (!phone) {
       console.warn(`⚠️ No phone found for order ${orderName} (${orderId})`);
       return;
@@ -1253,6 +1257,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

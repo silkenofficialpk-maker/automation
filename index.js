@@ -1010,56 +1010,48 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     const fulfillment = req.body;
     res.sendStatus(200); // ✅ Always ACK quickly
 
-    // 1️⃣ Extract orderId safely
-    let rawOrderId =
-      fulfillment.order_id || fulfillment.order?.id || fulfillment.admin_graphql_api_id;
-    const orderId = normalizeOrderId(rawOrderId);
+    const fulfillmentId = fulfillment?.id || null;
+    const rawOrderId = fulfillment?.order_id || null;
+    const orderId = rawOrderId ? normalizeOrderId(rawOrderId) : null;
 
     if (!orderId) {
-      console.error("❌ Fulfillment missing orderId:", fulfillment.id);
-      return;
+      throw new Error("Invalid orderId passed: null");
     }
 
-    // 2️⃣ Fetch full order (to get name, phone, items)
-    const orderData = await getOrderDetails(orderId);
-    const order = orderData.order;
+    // 1️⃣ Fetch order name
+    const orderName = await getOrderName(orderId);
 
-    const orderName = order.name; // e.g. "#1001"
-    const phone =
-      order.phone ||
-      order.customer?.phone ||
-      order.shipping_address?.phone ||
-      null;
-
-    // 3️⃣ Save fulfillment info in Firebase
-    await db.ref(`orders/${orderId}/fulfillments/${fulfillment.id}`).set({
+    // 2️⃣ Save/update fulfillment info in Firebase (safe values only)
+    await db.ref(`orders/${orderId}/fulfillments/${fulfillmentId}`).set({
       order_id: orderId,
-      order_name: orderName,
-      status: fulfillment.status,
-      shipment_status: fulfillment.shipment_status || null,
-      tracking_url: fulfillment.tracking_url || null,
+      order_name: orderName || null,
+      status: fulfillment?.status || null,
+      shipment_status: fulfillment?.shipment_status || null,
+      tracking_url: fulfillment?.tracking_url || null,
       updated_at: new Date().toISOString(),
     });
 
     console.log(`🔥 Saved fulfillment update for order ${orderName} (${orderId})`);
 
-    // 4️⃣ WhatsApp messaging logic
-    if (fulfillment.status === "success" && !fulfillment.shipment_status) {
-      // First "shipped" event
+    // 3️⃣ Fetch customer phone (safe)
+    const phone = await getCustomerPhone(orderId);
+    if (!phone) {
+      console.warn(`⚠️ No phone found for order ${orderName} (${orderId})`);
+      return;
+    }
+
+    // 4️⃣ WhatsApp logic (safe variables)
+    const customerName = fulfillment?.customer?.first_name || "Customer";
+    const safeOrderName = orderName || `Order ${orderId}`;
+    const trackingUrl = fulfillment?.tracking_url || "https://yourstore.com/track";
+
+    if (fulfillment?.status === "success" && !fulfillment?.shipment_status) {
       await sendWhatsAppTemplate(phone, "your_order_is_shipped_2025", {
-        body: [
-          order.customer?.first_name || "Customer",
-          orderName,
-          order.line_items?.[0]?.name || "Product",
-          order.line_items?.[0]?.price || "0.00",
-          order.line_items?.[0]?.price_set?.shop_money?.currency_code || "PKR",
-          fulfillment.tracking_url || "No tracking available yet",
-        ],
+        body: [customerName, safeOrderName, trackingUrl],
       });
     }
 
-    if (fulfillment.shipment_status) {
-      // Later courier updates
+    if (fulfillment?.shipment_status) {
       const templateMap = {
         in_transit: "order_in_transit",
         out_for_delivery: "order_out_for_delivery",
@@ -1068,7 +1060,7 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
       };
       if (templateMap[fulfillment.shipment_status]) {
         await sendWhatsAppTemplate(phone, templateMap[fulfillment.shipment_status], {
-          body: [orderName],
+          body: [safeOrderName],
         });
       }
     }
@@ -1257,6 +1249,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -973,28 +973,72 @@ async function handleDeliveryEvent(order, status) {
   }
 }
 // ---------------- Shopify Fulfillment Webhook ----------------
-app.post("/webhook/fulfillment", express.json({ type: "application/json" }), async (req, res) => {
+// Helper: fetch order name
+async function getOrderName(orderId) {
+  const url = `https://${SHOPIFY_STORE}/admin/api/2025-01/orders/${orderId}.json`;
+  const res = await fetch(url, {
+    headers: {
+      "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+      "Content-Type": "application/json"
+    }
+  });
+  if (!res.ok) throw new Error(`Shopify order fetch failed: ${res.status}`);
+  const data = await res.json();
+  return data.order?.name || null; // e.g. "#1001"
+}
+
+// 📦 Fulfillment Webhook
+app.post("/webhook/shopify/fulfillment", async (req, res) => {
   try {
-    
     const fulfillment = req.body;
-    const orderId = fulfillment.order_id;
+    res.sendStatus(200); // ✅ Always ACK quickly
 
-    console.log("🚚 Fulfillment event for Order:", orderId);
+    const { id: fulfillmentId, order_id: orderId, status, shipment_status, tracking_url } = fulfillment;
 
-    if (fulfillment.status === "out_for_delivery") {
-      await handleDeliveryEvent({ id: orderId, ...fulfillment }, "out_for_delivery");
-    }
-    if (fulfillment.status === "delivered") {
-      await handleDeliveryEvent({ id: orderId, ...fulfillment }, "delivered");
-    }
-    if (fulfillment.status === "return_initiated") {
-      await handleDeliveryEvent({ id: orderId, ...fulfillment }, "return_initiated");
+    // 1️⃣ Fetch order name
+    const orderName = await getOrderName(orderId);
+
+    // 2️⃣ Save/update fulfillment info in Firebase
+    await db.ref(`orders/${orderId}/fulfillments/${fulfillmentId}`).set({
+      order_id: orderId,
+      order_name: orderName,  // <--- this is the "#1001" friendly ID
+      status,
+      shipment_status: shipment_status || null,
+      tracking_url,
+      updated_at: new Date().toISOString()
+    });
+
+    console.log(`🔥 Saved fulfillment update for order ${orderName} (${orderId})`);
+
+    // 3️⃣ Fetch customer phone (from DB or Shopify)
+    const phone = await getCustomerPhone(orderId);
+
+    // 4️⃣ WhatsApp logic
+    if (status === "success" && !shipment_status) {
+      await sendWhatsAppTemplate(phone, "your_order_is_shipped_2025", {
+        body: [
+          fulfillment.customer?.first_name || "Customer",
+          orderName,       // 👈 Friendly ID instead of numeric
+          tracking_url
+        ]
+      });
     }
 
-    res.sendStatus(200);
+    if (shipment_status) {
+      const templateMap = {
+        in_transit: "order_in_transit",
+        out_for_delivery: "order_out_for_delivery",
+        delivered: "order_delivered",
+        failure: "order_failed_delivery"
+      };
+      if (templateMap[shipment_status]) {
+        await sendWhatsAppTemplate(phone, templateMap[shipment_status], {
+          body: [orderName]  // 👈 use friendly order name
+        });
+      }
+    }
   } catch (err) {
     console.error("❌ Fulfillment webhook error:", err);
-    res.sendStatus(500);
   }
 });
 // ---------------- Abandoned Checkout Recovery ----------------
@@ -1177,6 +1221,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

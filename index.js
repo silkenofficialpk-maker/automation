@@ -1019,7 +1019,14 @@ async function getOrderDetails(orderId) {
 app.post("/webhook/shopify/fulfillment", async (req, res) => {
   try {
     const fulfillment = req.body;
-    console.log("📦 Raw fulfillment webhook:", JSON.stringify(fulfillment, null, 2));
+    console.log("📦 Fulfillment:", {
+  fulfillmentId: fulfillment.id,
+  orderId: fulfillment.order_id,
+  status: fulfillment.status,
+  shipment_status: fulfillment.shipment_status,
+  tracking_url: fulfillment.tracking_url
+});
+
     res.sendStatus(200);
 
     const {
@@ -1262,6 +1269,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

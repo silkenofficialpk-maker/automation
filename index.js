@@ -1011,7 +1011,11 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     res.sendStatus(200); // ✅ Always ACK quickly
 
     const fulfillmentId = fulfillment?.id || null;
-    const rawOrderId = fulfillment?.order_id || null;
+    const rawOrderId =
+  req.body?.order_id ||       // from fulfillments/create or update
+  req.body?.order?.id ||      // from orders/fulfilled
+  null;
+
     const orderId = rawOrderId ? normalizeOrderId(rawOrderId) : null;
 
     if (!orderId) {
@@ -1249,6 +1253,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

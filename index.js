@@ -975,10 +975,10 @@ async function handleDeliveryEvent(order, status) {
 // ---------------- Shopify Fulfillment Webhook ----------------
 // Helper: fetch order name
 async function getOrderName(orderId) {
-  const url = `https://${SHOPIFY_STORE}/admin/api/2025-01/orders/${orderId}.json`;
+  const url = `https://${SHOPIFY_SHOP}/admin/api/2025-01/orders/${orderId}.json`;
   const res = await fetch(url, {
     headers: {
-      "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+      "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
       "Content-Type": "application/json"
     }
   });
@@ -1221,6 +1221,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

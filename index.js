@@ -973,18 +973,21 @@ async function handleDeliveryEvent(order, status) {
   }
 }
 // ---------------- Shopify Fulfillment Webhook ----------------
-// Helper: fetch order name
-
+// 🛠 Normalize orderId (handle both gid:// and numeric)
 function normalizeOrderId(orderId) {
+  if (!orderId) return null;
   if (typeof orderId === "string" && orderId.includes("gid://")) {
-    return orderId.split("/").pop();
+    return orderId.split("/").pop(); // take numeric part
   }
-  return orderId;
+  return String(orderId); // always return as string
 }
 
+// 🛠 Helper: fetch order details (name + phone)
+async function getOrderDetails(orderId) {
+  if (!orderId || isNaN(orderId)) {
+    throw new Error(`Invalid orderId passed: ${orderId}`);
+  }
 
-
-async function getOrderName(orderId) {
   const url = `https://${process.env.SHOPIFY_SHOP}/admin/api/2025-01/orders/${orderId}.json`;
   const res = await fetch(url, {
     headers: {
@@ -1000,25 +1003,43 @@ async function getOrderName(orderId) {
   }
 
   const data = await res.json();
-  return data.order?.name || null;
+  const order = data.order;
+
+  return {
+    name: order?.name || null, // "#1001"
+    phone:
+      order?.phone ||
+      order?.customer?.phone ||
+      order?.shipping_address?.phone ||
+      null
+  };
 }
 
 // 📦 Fulfillment Webhook
 app.post("/webhook/shopify/fulfillment", async (req, res) => {
   try {
     const fulfillment = req.body;
-    res.sendStatus(200); // ✅ Always ACK quickly
+    console.log("📦 Raw fulfillment webhook:", JSON.stringify(fulfillment, null, 2));
+    res.sendStatus(200);
 
-    const { id: fulfillmentId, order_id: rawOrderId, status, shipment_status, tracking_url } = fulfillment;
+    const {
+      id: fulfillmentId,
+      order_id: rawOrderId,
+      status,
+      shipment_status,
+      tracking_url
+    } = fulfillment;
 
-    // 1️⃣ Fetch order name
     const orderId = normalizeOrderId(rawOrderId);
-    const orderName = await getOrderName(orderId);
+
+    // 1️⃣ Fetch order details
+    const { name: orderName, phone } = await getOrderDetails(orderId);
 
     // 2️⃣ Save/update fulfillment info in Firebase
     await db.ref(`orders/${orderId}/fulfillments/${fulfillmentId}`).set({
       order_id: orderId,
-      order_name: orderName,  // <--- this is the "#1001" friendly ID
+      order_gid: rawOrderId,
+      order_name: orderName,
       status,
       shipment_status: shipment_status || null,
       tracking_url,
@@ -1027,15 +1048,17 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
 
     console.log(`🔥 Saved fulfillment update for order ${orderName} (${orderId})`);
 
-    // 3️⃣ Fetch customer phone (from DB or Shopify)
-    const phone = await getCustomerPhone(orderId);
+    // 3️⃣ WhatsApp logic
+    if (!phone) {
+      console.warn(`⚠️ No phone number found for order ${orderName}`);
+      return;
+    }
 
-    // 4️⃣ WhatsApp logic
     if (status === "success" && !shipment_status) {
       await sendWhatsAppTemplate(phone, "your_order_is_shipped_2025", {
         body: [
           fulfillment.customer?.first_name || "Customer",
-          orderName,       // 👈 Friendly ID instead of numeric
+          orderName,
           tracking_url
         ]
       });
@@ -1050,7 +1073,7 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
       };
       if (templateMap[shipment_status]) {
         await sendWhatsAppTemplate(phone, templateMap[shipment_status], {
-          body: [orderName]  // 👈 use friendly order name
+          body: [orderName]
         });
       }
     }
@@ -1058,6 +1081,7 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     console.error("❌ Fulfillment webhook error:", err);
   }
 });
+
 // ---------------- Abandoned Checkout Recovery ----------------
 app.post("/webhook/abandoned_checkout", express.json({ type: "application/json" }), async (req, res) => {
   try {
@@ -1238,6 +1262,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

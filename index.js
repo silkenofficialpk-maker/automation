@@ -1024,11 +1024,9 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
 
     // 1️⃣ Fetch order name
     const orderName = await getOrderDetails(orderId);
-    const phone =
-      fulfillment?.phone ||
-      fulfillment?.customer?.phone ||
-      fulfillment?.shipping_address?.phone ||
-      null;
+    const phoneSnapshot = await db.ref(`orders/${orderId}/phone`).get();
+    const phone = phoneSnapshot.val();
+
 
     // 2️⃣ Save/update fulfillment info in Firebase (safe values only)
     await db.ref(`orders/${orderId}/fulfillments/${fulfillmentId}`).set({
@@ -1257,6 +1255,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

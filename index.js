@@ -1025,7 +1025,7 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
       orderData?.order?.shipping_address?.phone ||
       null;
 
-    // Save order root info (stable)
+    // Save order root info
     await db.ref(`orders/${orderId}`).update({
       order_name: orderName,
       phone: phone,
@@ -1047,24 +1047,20 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
       return;
     }
 
-    const trackingUrl =
-      fulfillment?.tracking_url || "https://silkenroot.com/track";
-
     // --- Case 1: First shipped (status=success, no shipment_status yet)
     if (fulfillment?.status === "success" && !fulfillment?.shipment_status) {
       await sendWhatsAppTemplate(phone, "your_order_is_shipped_2025", {
-        body: [orderName],
-        // ✅ Only add button if template supports it
+        body: [orderName], // ✅ only 1 param
         button: [
           {
-            sub_type: "url",
-            value: trackingUrl,
+            sub_type: "quick_reply",
+            value: "track_order", // ✅ payload, you decide handling
           },
         ],
       });
     }
 
-    // --- Case 2: Shipment status updates (in_transit, delivered, etc.)
+    // --- Case 2: Shipment status updates
     if (fulfillment?.shipment_status) {
       const templateMap = {
         in_transit: "order_in_transit",
@@ -1265,6 +1261,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -1050,7 +1050,7 @@ app.post("/webhook/shopify/fulfillment", async (req, res) => {
     // --- Case 1: First shipped (status=success, no shipment_status yet)
     if (fulfillment?.status === "success" && !fulfillment?.shipment_status) {
       await sendWhatsAppTemplate(phone, "your_order_is_shipped_2025", {
-  body: [safeOrderName],
+   body: [orderName], // ✅ only 1 param
   button: [
     {
       sub_type: "url",
@@ -1262,6 +1262,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

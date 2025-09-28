@@ -494,6 +494,7 @@ app.post(
   }
 );
 // WhatsApp Webhook (Messages + Button Clicks)
+// ---- WhatsApp Webhook (Messages + Button Clicks) ----
 app.post("/webhook/whatsapp", async (req, res) => {
   try {
     console.log("📩 WA Webhook:", JSON.stringify(req.body, null, 2));
@@ -525,9 +526,18 @@ app.post("/webhook/whatsapp", async (req, res) => {
       const payload = msg.button?.payload;
       console.log("🔘 Button clicked:", payload);
 
-      const orderRef = db.ref("orders");
-      const snapshot = await orderRef.orderByChild("phone").equalTo(phone).limitToLast(1).once("value");
-      if (!snapshot.exists()) return;
+      // 🔍 Find latest order by phone
+      const snapshot = await db
+        .ref("orders")
+        .orderByChild("phone")
+        .equalTo(phone)
+        .limitToLast(1)
+        .once("value");
+
+      if (!snapshot.exists()) {
+        console.warn("⚠️ No order found for phone:", phone);
+        return;
+      }
 
       const [orderId, meta] = Object.entries(snapshot.val())[0];
       let newStatus = "pending";
@@ -535,40 +545,53 @@ app.post("/webhook/whatsapp", async (req, res) => {
       switch (payload) {
         case "CONFIRM_ORDER":
           newStatus = "confirmed";
-          await sendWhatsAppTemplate(phone, "order_confirmed_reply", [
-            { type: "body", parameters: [{ type: "text", text: meta.customerName }, { type: "text", text: orderId }] }
-          ]);
+
+          // ✅ Update Shopify order note
+          await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
+
+          // ✅ Reply to customer
+          await sendWhatsAppTemplate(phone, "order_confirmed_reply", {
+            body: [meta.customerName, orderId],
+          });
           break;
 
         case "CANCEL_ORDER":
           newStatus = "cancelled";
-          await sendWhatsAppTemplate(phone, "order_cancelled_reply_auto", [
-            { type: "body", parameters: [{ type: "text", text: orderId }] }
-          ]);
+
+          await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
+
+          await sendWhatsAppTemplate(phone, "order_cancelled_reply_auto", {
+            body: [orderId],
+          });
           break;
 
         case "REDELIVER_TOMORROW":
           newStatus = "redelivery";
-          await sendWhatsAppTemplate(phone, "redelivery_scheduled", [
-            { type: "body", parameters: [
-              { type: "text", text: orderId },
-              { type: "text", text: "Tomorrow" },
-              { type: "text", text: "10am–6pm" }
-            ] }
-          ]);
+
+          await updateShopifyOrderNote(orderId, "📦 Redelivery requested: Tomorrow 10am–6pm");
+
+          await sendWhatsAppTemplate(phone, "redelivery_scheduled", {
+            body: [orderId, "Tomorrow", "10am–6pm"],
+          });
           break;
 
         default:
           newStatus = `action_${payload}`;
       }
 
-      await db.ref("orders").child(orderId).update({ status: newStatus, updatedAt: Date.now() });
+      // ✅ Update Firebase order
+      await db.ref("orders").child(orderId).update({
+        status: newStatus,
+        updatedAt: Date.now(),
+      });
+
       console.log(`✅ Order ${orderId} updated to ${newStatus}`);
     }
   } catch (err) {
     console.error("❌ WA webhook error:", err);
   }
 });
+
 // Courier Webhook (COD status updates)
 app.post("/webhook/courier", express.json(), async (req, res) => {
   try {

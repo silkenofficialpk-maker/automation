@@ -227,7 +227,7 @@ app.get("/webhook", (req, res) => {
 
 // ---- Unified Meta/WhatsApp Webhook ----
 // 
-// ---- Unified Meta/WhatsApp Webhook ----
+// ----------------- Meta (WhatsApp) Webhook -----------------
 app.post("/webhook", express.json(), async (req, res) => {
   try {
     const body = req.body;
@@ -239,7 +239,7 @@ app.post("/webhook", express.json(), async (req, res) => {
     const value = body.entry?.[0]?.changes?.[0]?.value;
     if (!value) return;
 
-    // ✅ Delivery Receipts (status updates)
+    // Delivery receipts
     if (Array.isArray(value.statuses)) {
       value.statuses.forEach((s) => {
         console.log(`📦 WA Status update: ${s.status} (msgId: ${s.id})`);
@@ -247,87 +247,78 @@ app.post("/webhook", express.json(), async (req, res) => {
       return;
     }
 
-    // ✅ Incoming messages
+    // Incoming message
     const msg = value.messages?.[0];
     if (!msg) return;
 
-    const from = normalizePhone(msg.from);
-    const phone = from;
+    const phoneRaw = msg.from;
+    const phone = normalizePhone(phoneRaw);
 
-    // 🟢 Button Clicks
+    // BUTTON CLICK
     if (msg.type === "button") {
-      const payload = msg.button?.payload;
-      console.log("🔘 Button clicked:", payload);
+  let rawPayload = msg.button?.payload || msg.button?.text || msg.button?.title || null;
+  console.log("🔘 Button clicked:", rawPayload);
 
-      // Expecting payload format: CONFIRM_ORDER_1234567890
-      const [action, , orderId] = payload.split("_");
+  if (!rawPayload) return;
 
-      if (!orderId) {
-        console.warn("⚠️ Invalid payload, no orderId:", payload);
-        return;
-      }
+  let [action, orderId] = rawPayload.split(":");
+  if (!orderId) {
+    console.warn("⚠️ Invalid payload, no orderId:", rawPayload);
+    return;
+  }
 
-      // Fetch this order from Firebase
-      const snapshot = await db.ref("orders").child(orderId).once("value");
-      if (!snapshot.exists()) {
-        console.warn("⚠️ No order found in Firebase:", orderId);
-        return;
-      }
+  action = action.toUpperCase();
 
-      const meta = snapshot.val();
-      let newStatus = "pending";
-
-      switch (action) {
-        case "CONFIRM":
-          newStatus = "confirmed";
-          await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
-          await sendWhatsAppTemplate(phone, "order_confirmed_reply", {
-            body: [meta.customerName || "Customer", orderId],
-          });
-          break;
-
-        case "CANCEL":
-          newStatus = "cancelled";
-          await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
-          await sendWhatsAppTemplate(phone, "order_cancelled_reply_auto", {
-            body: [orderId],
-          });
-          break;
-
-        case "REDELIVER":
-          newStatus = "redelivery";
-          await updateShopifyOrderNote(
-            orderId,
-            "📦 Redelivery requested: Tomorrow 10am–6pm"
-          );
-          await sendWhatsAppTemplate(phone, "redelivery_scheduled", {
-            body: [orderId, "Tomorrow", "10am–6pm"],
-          });
-          break;
-
-        default:
-          newStatus = `action_${action}`;
-      }
-
-      // Update Firebase
-      await db.ref("orders").child(orderId).update({
-        status: newStatus,
-        updatedAt: Date.now(),
+  switch (action) {
+    case PAYLOADS.CONFIRM_ORDER:
+      await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
+      await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
+        body: [orderId],
       });
+      break;
 
-      console.log(`✅ Order ${orderId} updated to ${newStatus}`);
-    }
+    case PAYLOADS.CANCEL_ORDER:
+      await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
+      await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
+        body: [orderId],
+      });
+      break;
 
-    // 🟢 Free-text messages
-    else if (msg.type === "text") {
+    case PAYLOADS.REDELIVER_TOMORROW:
+      await updateShopifyOrderNote(orderId, "📦 Redelivery requested via WhatsApp");
+      await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, {
+        body: [orderId, "Tomorrow", "10am–6pm"],
+      });
+      break;
+
+    default:
+      console.log("⚠️ Unknown payload action:", action);
+  }
+
+  // Update Firebase too
+  await db.ref("orders").child(orderId).update({
+    status: action.toLowerCase(),
+    updatedAt: Date.now(),
+  });
+
+  console.log(`✅ Order ${orderId} updated (${action})`);
+}
+
+    // TEXT message
+    if (msg.type === "text") {
       const text = msg.text?.body || null;
-      await dbSet(`/whatsapp/incoming/${Date.now()}`, { from, text });
-      console.log("✅ Stored incoming WA msg from:", from);
+      await dbSet(`/whatsapp/incoming/${Date.now()}`, { from: phone, text });
+      console.log("✅ Stored incoming WA msg from:", phone);
+      return;
     }
+
+    // Other message types — just log and store minimal info
+    console.log("ℹ️ Unsupported message type:", msg.type);
   } catch (err) {
     console.error("❌ Unified WA webhook error:", err);
   }
 });
+
 
 // ----------------- Shopify Webhook -----------------
 function verifyShopifyWebhook(req, res, buf) {
@@ -388,41 +379,32 @@ async function updateOrderStatus(orderId, status) {
 
 // Send confirmation message to customer (COD flow)
 // Send confirmation message to customer (COD flow)
-// Send confirmation message to customer (COD flow)
 async function sendOrderConfirmation(order) {
   const phone = normalizePhone(order.phone);
   if (!phone) return;
 
+  const body = [
+    order.customerName || "Customer",
+    String(order.id || "-"),
+    order.product || "Product",
+    String(order.qty || 1),
+    order.storeName || "Silken Root",
+    String(order.total || "0"),
+    order.currency || "PKR",
+  ];
+
+  // ✅ Only 2 buttons: Confirm / Cancel
+  const buttons = [
+    { sub_type: "quick_reply", value: `${PAYLOADS.CONFIRM_ORDER}:${order.id}` },
+    { sub_type: "quick_reply", value: `${PAYLOADS.CANCEL_ORDER}:${order.id}` },
+  ];
+
   await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, {
-    body: [
-      order.customerName || "Customer",      // {{1}} Hello NAME 👋
-      order.id?.toString() || "-",           // {{2}} Order #
-      order.product || "Product",            // {{3}} Product name
-      order.variant || "-",                  // {{4}} Variant (e.g., Size/Color)
-      order.storeName || "Our Store",        // {{5}} Store name
-      String(order.total || "0"),            // {{6}} Amount
-      order.currency || "PKR",               // {{7}} Currency
-    ],
-    buttons: [
-      {
-        type: "quick_reply",
-        text: "✅ Confirm Order",
-        payload: `CONFIRM_ORDER:${order.id}`,   // ✅ Attach orderId
-      },
-      {
-        type: "quick_reply",
-        text: "❌ Cancel Order",
-        payload: `CANCEL_ORDER:${order.id}`,    // ✅ Attach orderId
-      },
-      {
-        type: "quick_reply",
-        text: "📦 Redeliver Tomorrow",
-        payload: `REDELIVER_TOMORROW:${order.id}`, // ✅ Attach orderId
-      },
-    ],
+    body,
+    button: buttons,
   });
 
-  console.log("📩 Sent COD confirmation to:", phone, "for order:", order.id);
+  console.log("📩 Sent COD confirmation:", order.id, "to", phone);
 }
 
 
@@ -1384,6 +1366,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -267,13 +267,30 @@ app.post("/webhook", express.json(), async (req, res) => {
     return;
   }
 
+  // 🔍 Get the latest order for this phone
+      const snapshot = await db
+        .ref("orders")
+        .orderByChild("phone")
+        .equalTo(phone)
+        .limitToLast(1)
+        .once("value");
+
+      if (!snapshot.exists()) {
+        console.warn("⚠️ No order found for phone:", phone);
+        return;
+        }
+
+      // Here’s the fix ⬇️
+      const [orderId, orderData] = Object.entries(snapshot.val())[0];
+      let newStatus = "pending";
+
   action = action.toUpperCase();
 
   switch (action) {
   case PAYLOADS.CONFIRM_ORDER:
     await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
     await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
-      body: [meta.customerName || "Customer", String(orderId || "-")],
+      body: [orderData.customerName || "Customer", String(orderId || "-")],
     });
     newStatus = "confirmed";
     break;
@@ -1364,6 +1381,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

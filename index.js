@@ -77,6 +77,7 @@ const TPL = {
   FEEDBACK_REQUEST: "request",
   YOUR_ORDER_IS_SHIPPED: "your_order_is_shipped_2025",
   ORDER_PLACED: "order_placed",
+  CALL_US_TEMPLATE: "call_us_template",
 };
 
 // ---- Button Payloads ----
@@ -229,6 +230,7 @@ app.get("/webhook", (req, res) => {
 // 
 // ----------------- Meta (WhatsApp) Webhook -----------------
 // ----------------- Meta (WhatsApp) Webhook -----------------
+// ----------------- Meta (WhatsApp) Webhook -----------------
 app.post("/webhook", express.json(), async (req, res) => {
   try {
     const body = req.body;
@@ -300,6 +302,22 @@ app.post("/webhook", express.json(), async (req, res) => {
         return;
       }
 
+      // ✅ Prevent double-action → if already processed, send call template
+      if (
+        orderData?.status === "confirmed" ||
+        orderData?.status === "cancelled" ||
+        orderData?.status === "rescheduled"
+      ) {
+        console.log(`ℹ️ Order ${orderId} already ${orderData.status}, sending call_us_template`);
+
+        await sendWhatsAppTemplate(phone, TPL.CALL_US_TEMPLATE, {
+          body: [orderData.status.toUpperCase()], // CONFIRMED / CANCELLED / RESCHEDULED
+        });
+
+        return;
+      }
+
+      // --- First-time actions ---
       let newStatus = "pending";
 
       switch (action) {
@@ -359,6 +377,23 @@ app.post("/webhook", express.json(), async (req, res) => {
       const text = msg.text?.body || null;
       await dbSet(`/whatsapp/incoming/${Date.now()}`, { from: phone, text });
       console.log("✅ Stored incoming WA msg from:", phone);
+      return;
+    }
+
+    // ---- AUDIO / VOICE MESSAGE ----
+    if (msg.type === "audio") {
+      const audio = msg.audio || {};
+      const record = {
+        from: phone,
+        timestamp: Date.now(),
+        mediaId: audio.id || null,
+        mimeType: audio.mime_type || null,
+        fileSize: audio.file_size || null,
+        voice: audio.voice || false, // true if recorded as voice note
+      };
+
+      await dbSet(`/whatsapp/audio/${Date.now()}`, record);
+      console.log("🎙️ Stored incoming audio msg from:", phone, record);
       return;
     }
 
@@ -1416,6 +1451,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

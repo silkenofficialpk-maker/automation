@@ -270,30 +270,29 @@ app.post("/webhook", express.json(), async (req, res) => {
   action = action.toUpperCase();
 
   switch (action) {
-    case PAYLOADS.CONFIRM_ORDER:
-      await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
-      await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
-        body: [orderId],
-      });
-      break;
+    switch (payload) {
+  case PAYLOADS.CONFIRM_ORDER:
+    await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
+    await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
+      body: [meta.customerName || "Customer", String(orderId || "-")],
+    });
+    newStatus = "confirmed";
+    break;
 
-    case PAYLOADS.CANCEL_ORDER:
-      await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
-      await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
-        body: [orderId],
-      });
-      break;
+  case PAYLOADS.CANCEL_ORDER:
+    await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
+    await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
+      body: [String(orderId || "-")],
+    });
+    newStatus = "cancelled";
+    break;
 
-    case PAYLOADS.REDELIVER_TOMORROW:
-      await updateShopifyOrderNote(orderId, "📦 Redelivery requested via WhatsApp");
-      await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, {
-        body: [orderId, "Tomorrow", "10am–6pm"],
-      });
-      break;
+  default:
+    newStatus = `action_${payload}`;
+        console.log("⚠️ Unknown payload action:", action);
+}
 
-    default:
-      console.log("⚠️ Unknown payload action:", action);
-  }
+
 
   // Update Firebase too
   await db.ref("orders").child(orderId).update({
@@ -1366,6 +1365,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -228,6 +228,7 @@ app.get("/webhook", (req, res) => {
 // ---- Unified Meta/WhatsApp Webhook ----
 // 
 // ----------------- Meta (WhatsApp) Webhook -----------------
+// ----------------- Meta (WhatsApp) Webhook -----------------
 app.post("/webhook", express.json(), async (req, res) => {
   try {
     const body = req.body;
@@ -239,7 +240,7 @@ app.post("/webhook", express.json(), async (req, res) => {
     const value = body.entry?.[0]?.changes?.[0]?.value;
     if (!value) return;
 
-    // Delivery receipts
+    // ---- Delivery receipts ----
     if (Array.isArray(value.statuses)) {
       value.statuses.forEach((s) => {
         console.log(`📦 WA Status update: ${s.status} (msgId: ${s.id})`);
@@ -247,79 +248,113 @@ app.post("/webhook", express.json(), async (req, res) => {
       return;
     }
 
-    // Incoming message
+    // ---- Incoming message ----
     const msg = value.messages?.[0];
     if (!msg) return;
 
     const phoneRaw = msg.from;
     const phone = normalizePhone(phoneRaw);
 
-    // BUTTON CLICK
+    // ---- BUTTON CLICK ----
     if (msg.type === "button") {
-  let rawPayload = msg.button?.payload || msg.button?.text || msg.button?.title || null;
-  console.log("🔘 Button clicked:", rawPayload);
+      let rawPayload =
+        msg.button?.payload || msg.button?.text || msg.button?.title || null;
+      console.log("🔘 Button clicked:", rawPayload);
 
-  if (!rawPayload) return;
+      if (!rawPayload) return;
 
-  let [action, orderId] = rawPayload.split(":");
-  if (!orderId) {
-    console.warn("⚠️ Invalid payload, no orderId:", rawPayload);
-    return;
-  }
+      let [action, payloadOrderId] = rawPayload.split(":");
+      action = action?.toUpperCase() || null;
 
-  // 🔍 Get the latest order for this phone
-      const snapshot = await db
-        .ref("orders")
-        .orderByChild("phone")
-        .equalTo(phone)
-        .limitToLast(1)
-        .once("value");
+      // Default values
+      let orderId = payloadOrderId || null;
+      let orderData = null;
 
-      if (!snapshot.exists()) {
-        console.warn("⚠️ No order found for phone:", phone);
-        return;
+      // If payloadOrderId missing → fallback to latest order from Firebase
+      if (!orderId) {
+        const snapshot = await db
+          .ref("orders")
+          .orderByChild("phone")
+          .equalTo(phone)
+          .limitToLast(1)
+          .once("value");
+
+        if (!snapshot.exists()) {
+          console.warn("⚠️ No order found for phone:", phone);
+          return;
         }
 
-      // Here’s the fix ⬇️
-      const [orderId, orderData] = Object.entries(snapshot.val())[0];
+        const [dbOrderId, dbOrderData] = Object.entries(snapshot.val())[0];
+        orderId = dbOrderId;
+        orderData = dbOrderData;
+      } else {
+        // Fetch this orderId from Firebase for context
+        const snap = await db.ref("orders").child(orderId).once("value");
+        if (snap.exists()) {
+          orderData = snap.val();
+        }
+      }
+
+      if (!orderId) {
+        console.warn("⚠️ Still no valid orderId after fallback:", rawPayload);
+        return;
+      }
+
       let newStatus = "pending";
 
-  action = action.toUpperCase();
+      switch (action) {
+        case PAYLOADS.CONFIRM_ORDER:
+          await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
+            body: [
+              orderData?.customerName || "Customer",
+              String(orderId || "-"),
+            ],
+          });
+          newStatus = "confirmed";
+          break;
 
-  switch (action) {
-  case PAYLOADS.CONFIRM_ORDER:
-    await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
-    await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
-      body: [orderData.customerName || "Customer", String(orderId || "-")],
-    });
-    newStatus = "confirmed";
-    break;
+        case PAYLOADS.CANCEL_ORDER:
+          await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
+          await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
+            body: [String(orderId || "-")],
+          });
+          newStatus = "cancelled";
+          break;
 
-  case PAYLOADS.CANCEL_ORDER:
-    await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
-    await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
-      body: [String(orderId || "-")],
-    });
-    newStatus = "cancelled";
-    break;
+        case PAYLOADS.REDELIVER_TOMORROW:
+          await updateShopifyOrderNote(
+            orderId,
+            "📦 Redelivery requested via WhatsApp"
+          );
+          await sendWhatsAppTemplate(phone, TPL.REDELIVERY_SCHEDULED, {
+            body: [
+              String(orderId || "-"),
+              "Tomorrow",
+              "10am–6pm",
+              orderData?.courier || "Courier",
+              `${orderData?.total || "0"} ${orderData?.currency || "PKR"}`,
+            ],
+          });
+          newStatus = "rescheduled";
+          break;
 
-  default:
-    newStatus = `action_${payload}`;
-        console.log("⚠️ Unknown payload action:", action);
-}
+        default:
+          console.log("⚠️ Unknown payload action:", action);
+          newStatus = `action_${action}`;
+      }
 
+      // Update Firebase too
+      await db.ref("orders").child(orderId).update({
+        status: newStatus,
+        updatedAt: Date.now(),
+      });
 
+      console.log(`✅ Order ${orderId} updated (${newStatus})`);
+      return;
+    }
 
-  // Update Firebase too
-  await db.ref("orders").child(orderId).update({
-    status: action.toLowerCase(),
-    updatedAt: Date.now(),
-  });
-
-  console.log(`✅ Order ${orderId} updated (${action})`);
-}
-
-    // TEXT message
+    // ---- TEXT MESSAGE ----
     if (msg.type === "text") {
       const text = msg.text?.body || null;
       await dbSet(`/whatsapp/incoming/${Date.now()}`, { from: phone, text });
@@ -327,7 +362,7 @@ app.post("/webhook", express.json(), async (req, res) => {
       return;
     }
 
-    // Other message types — just log and store minimal info
+    // ---- Other message types ----
     console.log("ℹ️ Unsupported message type:", msg.type);
   } catch (err) {
     console.error("❌ Unified WA webhook error:", err);
@@ -1381,6 +1416,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

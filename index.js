@@ -225,29 +225,103 @@ app.get("/webhook", (req, res) => {
   }
 });
 
+// ---- Unified Meta/WhatsApp Webhook ----
 app.post("/webhook", express.json(), async (req, res) => {
   try {
     const body = req.body;
-    if (body.object) {
-      console.log("📩 Incoming Meta webhook:", JSON.stringify(body, null, 2));
+    if (!body.object) return res.sendStatus(200);
 
-      // Example: handle WhatsApp messages
-      const entry = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-      if (entry && entry.from) {
-        const from = normalizePhone(entry.from);
-        const text = entry.text?.body || null;
+    console.log("📩 Incoming Meta webhook:", JSON.stringify(body, null, 2));
+    res.sendStatus(200); // ACK fast
 
-        await dbSet(`/whatsapp/incoming/${Date.now()}`, { from, text });
-        console.log("✅ Stored incoming WA msg from:", from);
-      }
-      return res.sendStatus(200);
+    const value = body.entry?.[0]?.changes?.[0]?.value;
+    if (!value) return;
+
+    // ✅ Delivery Receipts (status updates)
+    if (Array.isArray(value.statuses)) {
+      value.statuses.forEach((s) => {
+        console.log(`📦 WA Status update: ${s.status} (msgId: ${s.id})`);
+      });
+      return;
     }
-   
+
+    // ✅ Incoming messages
+    const msg = value.messages?.[0];
+    if (!msg) return;
+
+    const from = normalizePhone(msg.from);
+    const phone = from;
+
+    // 🟢 Button Clicks
+    if (msg.type === "button") {
+      const payload = msg.button?.payload;
+      console.log("🔘 Button clicked:", payload);
+
+      // Find latest order by phone
+      const snapshot = await db
+        .ref("orders")
+        .orderByChild("phone")
+        .equalTo(phone)
+        .limitToLast(1)
+        .once("value");
+
+      if (!snapshot.exists()) {
+        console.warn("⚠️ No order found for phone:", phone);
+        return;
+      }
+
+      const [orderId, meta] = Object.entries(snapshot.val())[0];
+      let newStatus = "pending";
+
+      switch (payload) {
+        case "CONFIRM_ORDER":
+          newStatus = "confirmed";
+          await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
+          await sendWhatsAppTemplate(phone, "order_confirmed_reply", {
+            body: [meta.customerName, orderId],
+          });
+          break;
+
+        case "CANCEL_ORDER":
+          newStatus = "cancelled";
+          await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
+          await sendWhatsAppTemplate(phone, "order_cancelled_reply_auto", {
+            body: [orderId],
+          });
+          break;
+
+        case "REDELIVER_TOMORROW":
+          newStatus = "redelivery";
+          await updateShopifyOrderNote(orderId, "📦 Redelivery requested: Tomorrow 10am–6pm");
+          await sendWhatsAppTemplate(phone, "redelivery_scheduled", {
+            body: [orderId, "Tomorrow", "10am–6pm"],
+          });
+          break;
+
+        default:
+          newStatus = `action_${payload}`;
+      }
+
+      // Update Firebase
+      await db.ref("orders").child(orderId).update({
+        status: newStatus,
+        updatedAt: Date.now(),
+      });
+
+      console.log(`✅ Order ${orderId} updated to ${newStatus}`);
+    }
+
+    // 🟢 Free-text messages
+    else if (msg.type === "text") {
+      const text = msg.text?.body || null;
+      await dbSet(`/whatsapp/incoming/${Date.now()}`, { from, text });
+      console.log("✅ Stored incoming WA msg from:", from);
+    }
   } catch (err) {
-    console.error("❌ WA webhook handler error:", err);
-    res.sendStatus(500);
+    console.error("❌ Unified WA webhook error:", err);
   }
 });
+
 
 // ----------------- Shopify Webhook -----------------
 function verifyShopifyWebhook(req, res, buf) {
@@ -495,7 +569,7 @@ app.post(
 );
 // WhatsApp Webhook (Messages + Button Clicks)
 // ---- WhatsApp Webhook (Messages + Button Clicks) ----
-app.post("/webhook", async (req, res) => {
+app.post("/webhook/whatsapp", async (req, res) => {
   try {
     console.log("📩 WA Webhook:", JSON.stringify(req.body, null, 2));
     res.sendStatus(200); // Always ACK fast
@@ -1285,6 +1359,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

@@ -388,24 +388,43 @@ async function updateOrderStatus(orderId, status) {
 
 // Send confirmation message to customer (COD flow)
 // Send confirmation message to customer (COD flow)
+// Send confirmation message to customer (COD flow)
 async function sendOrderConfirmation(order) {
   const phone = normalizePhone(order.phone);
   if (!phone) return;
 
   await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMATION, {
     body: [
-      order.customerName || "Customer",   // {{1}} Hello NAME 👋
-      order.id?.toString() || "-",        // {{2}} Order #
-      order.productName || "Product",     // {{3}} Product name
-      order.variant || "-",               // {{4}} Variant (e.g., Size/Color)
-      order.storeName || "Our Store",     // {{5}} Store name
-      order.total_price || "0",           // {{6}} Amount
-      order.currency || "PKR",            // {{7}} Currency
+      order.customerName || "Customer",      // {{1}} Hello NAME 👋
+      order.id?.toString() || "-",           // {{2}} Order #
+      order.product || "Product",            // {{3}} Product name
+      order.variant || "-",                  // {{4}} Variant (e.g., Size/Color)
+      order.storeName || "Our Store",        // {{5}} Store name
+      String(order.total || "0"),            // {{6}} Amount
+      order.currency || "PKR",               // {{7}} Currency
+    ],
+    buttons: [
+      {
+        type: "quick_reply",
+        text: "✅ Confirm Order",
+        payload: `CONFIRM_ORDER:${order.id}`,   // ✅ Attach orderId
+      },
+      {
+        type: "quick_reply",
+        text: "❌ Cancel Order",
+        payload: `CANCEL_ORDER:${order.id}`,    // ✅ Attach orderId
+      },
+      {
+        type: "quick_reply",
+        text: "📦 Redeliver Tomorrow",
+        payload: `REDELIVER_TOMORROW:${order.id}`, // ✅ Attach orderId
+      },
     ],
   });
 
-  console.log("📩 Sent COD confirmation to:", phone);
+  console.log("📩 Sent COD confirmation to:", phone, "for order:", order.id);
 }
+
 
 
 // Handle delivery attempt
@@ -1365,6 +1384,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

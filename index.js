@@ -599,6 +599,9 @@ app.post(
 res.sendStatus(200);
       const order = parseRawBody(req);
       console.log("🛒 Shopify Order Created:", order.id);
+      const orderId = order.id;
+      const orderData = await getOrderDetails(orderId);
+    const orderName = orderData?.order?.name || `Order ${orderId}`;
 
       // Save to Firebase
       await saveCODOrder({
@@ -613,7 +616,7 @@ res.sendStatus(200);
 
       // Send WhatsApp Confirmation
       await sendOrderConfirmation({
-        id: order.id,
+        id: orderName,
         customerName: order.customer?.first_name || "Customer",
         phone: order.shipping_address?.phone || order.customer?.phone,
         total: order.total_price,
@@ -1325,11 +1328,13 @@ async function requestFeedback(order) {
 async function handleNewOrder(order) {
   try {
     const orderId = order.id;
+    const orderData = await getOrderDetails(orderId);
+    const orderName = orderData?.order?.name || `Order ${orderId}`;
     const customerPhone = normalizePhone(order.shipping_address?.phone);
 
     // Save order in Firebase
     await dbSet(`orders/${orderId}`, {
-      orderId,
+      orderName,
       createdAt: Date.now(),
       customer: {
         name: order.customer?.first_name || "Unknown",
@@ -1353,7 +1358,6 @@ async function handleNewOrder(order) {
 app.post("/webhook/shopify/orders", express.json(), async (req, res) => {
   try {
     const order = req.body;
-
     console.log("📦 Received Shopify Order:", order.id);
 
     await handleNewOrder(order);
@@ -1446,6 +1450,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

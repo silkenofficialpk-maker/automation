@@ -326,7 +326,7 @@ app.post("/webhook", express.json(), async (req, res) => {
           await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
             body: [
               orderData?.customerName || "Customer",
-              String(orderData?.orderName || "-"),
+              String(orderData?.order_name || "-"),
             ],
           });
           newStatus = "confirmed";
@@ -335,7 +335,7 @@ app.post("/webhook", express.json(), async (req, res) => {
         case PAYLOADS.CANCEL_ORDER:
           await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
           await sendWhatsAppTemplate(phone, TPL.ORDER_CANCELLED_REPLY_AUTO, {
-            body: [String(orderId || "-")],
+            body: [String(orderData?.order_name || "-")],
           });
           newStatus = "cancelled";
           break;
@@ -1543,6 +1543,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

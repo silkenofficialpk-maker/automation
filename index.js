@@ -326,7 +326,7 @@ app.post("/webhook", express.json(), async (req, res) => {
           await sendWhatsAppTemplate(phone, TPL.ORDER_CONFIRMED_REPLY, {
             body: [
               orderData?.customerName || "Customer",
-              String(orderId || "-"),
+              String(orderData?.orderName || "-"),
             ],
           });
           newStatus = "confirmed";
@@ -1543,6 +1543,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

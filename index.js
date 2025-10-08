@@ -606,6 +606,7 @@ res.sendStatus(200);
       // Save to Firebase
       await saveCODOrder({
         id: order.id,
+        order_name: order.name,
         customerName: order.customer?.first_name || "Customer",
         phone: order.shipping_address?.phone || order.customer?.phone,
         total: order.total_price,
@@ -664,6 +665,7 @@ app.post(
 );
 // WhatsApp Webhook (Messages + Button Clicks)
 // ---- WhatsApp Webhook (Messages + Button Clicks) ----
+// ----------------- WhatsApp Webhook (Meta) -----------------
 app.post("/webhook/whatsapp", async (req, res) => {
   try {
     console.log("📩 WA Webhook:", JSON.stringify(req.body, null, 2));
@@ -672,10 +674,9 @@ app.post("/webhook/whatsapp", async (req, res) => {
     const entry = req.body.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
-
     if (!value) return;
 
-    // ✅ Delivery Receipts (message status updates)
+    // ✅ Delivery Receipts
     if (Array.isArray(value.statuses)) {
       value.statuses.forEach((s) => {
         console.log(`📦 Status update: ${s.status} (msgId: ${s.id})`);
@@ -683,69 +684,127 @@ app.post("/webhook/whatsapp", async (req, res) => {
       return;
     }
 
-    // ✅ Incoming Customer Messages
+    // ✅ Incoming Customer Message
     const msg = value.messages?.[0];
     if (!msg) return;
 
-    const from = msg.from; // WhatsApp number
+    const from = msg.from;
     const phone = normalizePhone(from);
 
-    // 🟢 Button Click Handling
+    // 🟢 BUTTON CLICK
     if (msg.type === "button") {
-      const payload = msg.button?.payload;
-      console.log("🔘 Button clicked:", payload);
+      const rawPayload = msg.button?.payload || msg.button?.text || msg.button?.title;
+      console.log("🔘 Button clicked:", rawPayload);
+      if (!rawPayload) return;
 
-      // 🔍 Find latest order by phone
-      const snapshot = await db
-        .ref("orders")
-        .orderByChild("phone")
-        .equalTo(phone)
-        .limitToLast(1)
-        .once("value");
+      let [action, orderRef] = rawPayload.split(":");
+      action = action?.toUpperCase() || null;
 
-      if (!snapshot.exists()) {
-        console.warn("⚠️ No order found for phone:", phone);
+      let orderId = null;
+      let orderData = null;
+
+      // 🧩 Try lookup by order name (e.g. #1234)
+      if (orderRef?.startsWith("#")) {
+        const snapshot = await db
+          .ref("orders")
+          .orderByChild("order_name")
+          .equalTo(orderRef)
+          .limitToLast(1)
+          .once("value");
+
+        if (snapshot.exists()) {
+          const [dbOrderId, dbOrderData] = Object.entries(snapshot.val())[0];
+          orderId = dbOrderId;
+          orderData = dbOrderData;
+        }
+      }
+
+      // 🧩 Fallback: Lookup by order ID
+      if (!orderId && orderRef) {
+        const snap = await db.ref("orders").child(orderRef).once("value");
+        if (snap.exists()) {
+          orderId = orderRef;
+          orderData = snap.val();
+        }
+      }
+
+      // 🧩 Fallback: Last order by phone
+      if (!orderId) {
+        const snapshot = await db
+          .ref("orders")
+          .orderByChild("phone")
+          .equalTo(phone)
+          .limitToLast(1)
+          .once("value");
+        if (snapshot.exists()) {
+          const [dbOrderId, dbOrderData] = Object.entries(snapshot.val())[0];
+          orderId = dbOrderId;
+          orderData = dbOrderData;
+        } else {
+          console.warn("⚠️ No order found for phone:", phone);
+          return;
+        }
+      }
+
+      if (!orderId) {
+        console.warn("⚠️ Invalid or missing order reference:", rawPayload);
         return;
       }
 
-      const [orderId, meta] = Object.entries(snapshot.val())[0];
+      // ✅ Prevent duplicate actions
+      if (["confirmed", "cancelled"].includes(orderData?.status)) {
+        console.log(`⚠️ Order ${orderId} already ${orderData.status}, ignoring repeat click.`);
+        await sendWhatsAppTemplate(phone, "order_already_processed", {
+          body: [
+            orderData.status.toUpperCase(),
+            "https://wa.me/" + process.env.WHATSAPP_NUMBER_ID,
+          ],
+        });
+        return;
+      }
+
       let newStatus = "pending";
 
-      switch (payload) {
+      switch (action) {
         case "CONFIRM_ORDER":
           newStatus = "confirmed";
-
-          // ✅ Update Shopify order note
           await updateShopifyOrderNote(orderId, "✅ Confirmed via WhatsApp");
-
-          // ✅ Reply to customer
           await sendWhatsAppTemplate(phone, "order_confirmed_reply", {
-            body: [meta.customerName, orderId],
+            body: [
+              orderData?.customerName || "Customer",
+              orderData?.order_name || String(orderId),
+            ],
           });
           break;
 
         case "CANCEL_ORDER":
           newStatus = "cancelled";
-
           await updateShopifyOrderNote(orderId, "❌ Cancelled via WhatsApp");
-
           await sendWhatsAppTemplate(phone, "order_cancelled_reply_auto", {
-            body: [orderId],
+            body: [orderData?.order_name || String(orderId)],
           });
           break;
 
         case "REDELIVER_TOMORROW":
           newStatus = "redelivery";
-
-          await updateShopifyOrderNote(orderId, "📦 Redelivery requested: Tomorrow 10am–6pm");
-
+          await updateShopifyOrderNote(
+            orderId,
+            "📦 Redelivery requested: Tomorrow 10am–6pm"
+          );
           await sendWhatsAppTemplate(phone, "redelivery_scheduled", {
-            body: [orderId, "Tomorrow", "10am–6pm"],
+            body: [
+              orderData?.order_name || String(orderId),
+              "Tomorrow",
+              "10am–6pm",
+              orderData?.courier || "Courier",
+              `${orderData?.total || "0"} ${orderData?.currency || "PKR"}`,
+            ],
           });
           break;
 
         default:
-          newStatus = `action_${payload}`;
+          console.log("⚠️ Unknown payload:", action);
+          newStatus = `action_${action}`;
       }
 
       // ✅ Update Firebase order
@@ -754,12 +813,40 @@ app.post("/webhook/whatsapp", async (req, res) => {
         updatedAt: Date.now(),
       });
 
-      console.log(`✅ Order ${orderId} updated to ${newStatus}`);
+      console.log(`✅ Order ${orderId} updated (${newStatus})`);
+      return;
     }
+
+    // 🟣 AUDIO / VOICE MESSAGE
+    if (msg.type === "audio" || msg.type === "voice") {
+      const mediaId = msg.audio?.id || msg.voice?.id;
+      const mimeType = msg.audio?.mime_type || msg.voice?.mime_type;
+      const mediaUrl = `https://graph.facebook.com/v17.0/${mediaId}`;
+      await dbSet(`/whatsapp/incoming/${Date.now()}`, {
+        from: phone,
+        type: msg.type,
+        mime: mimeType,
+        mediaUrl,
+      });
+      console.log(`🎤 Stored incoming ${msg.type} from: ${phone}`);
+      return;
+    }
+
+    // 📝 TEXT MESSAGE
+    if (msg.type === "text") {
+      const text = msg.text?.body || "";
+      await dbSet(`/whatsapp/incoming/${Date.now()}`, { from: phone, text });
+      console.log("✅ Stored incoming text msg from:", phone);
+      return;
+    }
+
+    // ℹ️ Other message types
+    console.log("ℹ️ Unsupported message type:", msg.type);
   } catch (err) {
     console.error("❌ WA webhook error:", err);
   }
 });
+
 
 // Courier Webhook (COD status updates)
 app.post("/webhook/courier", express.json(), async (req, res) => {
@@ -1450,6 +1537,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

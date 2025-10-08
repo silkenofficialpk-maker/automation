@@ -471,7 +471,7 @@ async function sendOrderConfirmation(order) {
 
   const body = [
     order.customerName || "Customer",
-    String(order_name || "-"),
+    String(order.order_name || "-"),
     order.product || "Product",
     String(order.qty || 1),
     order.storeName || "Silken Root",
@@ -1544,6 +1544,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

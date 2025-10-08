@@ -466,11 +466,12 @@ async function updateOrderStatus(orderId, status) {
 // Send confirmation message to customer (COD flow)
 async function sendOrderConfirmation(order) {
   const phone = normalizePhone(order.phone);
+  const order_name = order_name;
   if (!phone) return;
 
   const body = [
     order.customerName || "Customer",
-    String(order.id || "-"),
+    String(order_name || "-"),
     order.product || "Product",
     String(order.qty || 1),
     order.storeName || "Silken Root",
@@ -618,6 +619,7 @@ res.sendStatus(200);
       // Send WhatsApp Confirmation
       await sendOrderConfirmation({
         id: order.id,
+        order_name: orderName,
         customerName: order.customer?.first_name || "Customer",
         phone: order.shipping_address?.phone || order.customer?.phone,
         total: order.total_price,
@@ -1542,6 +1544,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 

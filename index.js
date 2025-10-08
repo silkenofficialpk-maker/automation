@@ -666,6 +666,7 @@ app.post(
 // WhatsApp Webhook (Messages + Button Clicks)
 // ---- WhatsApp Webhook (Messages + Button Clicks) ----
 // ----------------- WhatsApp Webhook (Meta) -----------------
+// ----------------- WhatsApp Webhook (Meta) -----------------
 app.post("/webhook/whatsapp", async (req, res) => {
   try {
     console.log("📩 WA Webhook:", JSON.stringify(req.body, null, 2));
@@ -693,7 +694,8 @@ app.post("/webhook/whatsapp", async (req, res) => {
 
     // 🟢 BUTTON CLICK
     if (msg.type === "button") {
-      const rawPayload = msg.button?.payload || msg.button?.text || msg.button?.title;
+      const rawPayload =
+        msg.button?.payload || msg.button?.text || msg.button?.title;
       console.log("🔘 Button clicked:", rawPayload);
       if (!rawPayload) return;
 
@@ -703,7 +705,7 @@ app.post("/webhook/whatsapp", async (req, res) => {
       let orderId = null;
       let orderData = null;
 
-      // 🧩 Try lookup by order name (e.g. #1234)
+      // 🧩 Handle Shopify Order Name (#1234)
       if (orderRef?.startsWith("#")) {
         const snapshot = await db
           .ref("orders")
@@ -714,12 +716,15 @@ app.post("/webhook/whatsapp", async (req, res) => {
 
         if (snapshot.exists()) {
           const [dbOrderId, dbOrderData] = Object.entries(snapshot.val())[0];
-          orderId = dbOrderId;
+          orderId = dbOrderId; // Firebase-safe key (Shopify ID)
           orderData = dbOrderData;
+        } else {
+          console.warn("⚠️ No order found for order_name:", orderRef);
+          return;
         }
       }
 
-      // 🧩 Fallback: Lookup by order ID
+      // 🧩 Fallback: direct ID
       if (!orderId && orderRef) {
         const snap = await db.ref("orders").child(orderRef).once("value");
         if (snap.exists()) {
@@ -728,7 +733,7 @@ app.post("/webhook/whatsapp", async (req, res) => {
         }
       }
 
-      // 🧩 Fallback: Last order by phone
+      // 🧩 Fallback: latest by phone
       if (!orderId) {
         const snapshot = await db
           .ref("orders")
@@ -736,6 +741,7 @@ app.post("/webhook/whatsapp", async (req, res) => {
           .equalTo(phone)
           .limitToLast(1)
           .once("value");
+
         if (snapshot.exists()) {
           const [dbOrderId, dbOrderData] = Object.entries(snapshot.val())[0];
           orderId = dbOrderId;
@@ -747,13 +753,13 @@ app.post("/webhook/whatsapp", async (req, res) => {
       }
 
       if (!orderId) {
-        console.warn("⚠️ Invalid or missing order reference:", rawPayload);
+        console.warn("⚠️ No valid order reference found:", rawPayload);
         return;
       }
 
-      // ✅ Prevent duplicate actions
+      // ✅ Prevent duplicate confirmation/cancellation
       if (["confirmed", "cancelled"].includes(orderData?.status)) {
-        console.log(`⚠️ Order ${orderId} already ${orderData.status}, ignoring repeat click.`);
+        console.log(`⚠️ Order ${orderId} already ${orderData.status}`);
         await sendWhatsAppTemplate(phone, "order_already_processed", {
           body: [
             orderData.status.toUpperCase(),
@@ -807,7 +813,7 @@ app.post("/webhook/whatsapp", async (req, res) => {
           newStatus = `action_${action}`;
       }
 
-      // ✅ Update Firebase order
+      // ✅ Update Firebase safely (orderId is clean)
       await db.ref("orders").child(orderId).update({
         status: newStatus,
         updatedAt: Date.now(),
@@ -840,7 +846,6 @@ app.post("/webhook/whatsapp", async (req, res) => {
       return;
     }
 
-    // ℹ️ Other message types
     console.log("ℹ️ Unsupported message type:", msg.type);
   } catch (err) {
     console.error("❌ WA webhook error:", err);
@@ -1537,6 +1542,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`⚡ Server running on port ${PORT}`);
 });
+
 
 
 
